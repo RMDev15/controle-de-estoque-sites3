@@ -27,10 +27,14 @@ export default function Users() {
     senha: "",
   });
   const [permissions, setPermissions] = useState({
-    cadastro: false,
-    terminal: false,
-    pedidos: false,
-    alertas: true,
+    cadastro_view: false,
+    cadastro_edit: false,
+    terminal_view: true,
+    terminal_edit: false,
+    pedidos_view: true,
+    pedidos_edit: false,
+    alertas_view: true,
+    alertas_edit: false,
     gerenciar_usuario: false,
   });
   const { toast } = useToast();
@@ -43,10 +47,14 @@ export default function Users() {
   useEffect(() => {
     if (selectedUser) {
       setPermissions(selectedUser.permissoes || {
-        cadastro: false,
-        terminal: false,
-        pedidos: false,
-        alertas: true,
+        cadastro_view: false,
+        cadastro_edit: false,
+        terminal_view: true,
+        terminal_edit: false,
+        pedidos_view: true,
+        pedidos_edit: false,
+        alertas_view: true,
+        alertas_edit: false,
         gerenciar_usuario: false,
       });
     }
@@ -68,6 +76,9 @@ export default function Users() {
   const handleUpdatePermissions = async () => {
     if (!selectedUser) return;
 
+    const isCurrentlyAdmin = Array.isArray(selectedUser.user_roles) && 
+      selectedUser.user_roles.some((ur: any) => ur.role === 'admin');
+
     const { error } = await supabase
       .from("profiles")
       .update({ permissoes: permissions })
@@ -79,11 +90,25 @@ export default function Users() {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Permissões atualizadas com sucesso!" });
-      setSelectedUser(null);
-      fetchUsers();
+      return;
     }
+
+    // Handle admin role based on gerenciar_usuario permission
+    if (permissions.gerenciar_usuario && !isCurrentlyAdmin) {
+      await supabase
+        .from("user_roles")
+        .insert({ user_id: selectedUser.id, role: "admin" });
+    } else if (!permissions.gerenciar_usuario && isCurrentlyAdmin) {
+      await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", selectedUser.id)
+        .eq("role", "admin");
+    }
+
+    toast({ title: "Permissões atualizadas com sucesso!" });
+    setSelectedUser(null);
+    fetchUsers();
   };
 
   const toggleAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
@@ -154,6 +179,13 @@ export default function Users() {
           senha_temporaria: !newUser.senha || newUser.senha === "Temp100@"
         })
         .eq("id", authData.user.id);
+
+      // If gerenciar_usuario is checked, make them admin
+      if (permissions.gerenciar_usuario) {
+        await supabase
+          .from("user_roles")
+          .insert({ user_id: authData.user.id, role: "admin" });
+      }
     }
 
     toast({ 
@@ -163,10 +195,14 @@ export default function Users() {
     setIsCreating(false);
     setNewUser({ nome: "", email: "", senha: "" });
     setPermissions({
-      cadastro: false,
-      terminal: false,
-      pedidos: false,
-      alertas: true,
+      cadastro_view: false,
+      cadastro_edit: false,
+      terminal_view: true,
+      terminal_edit: false,
+      pedidos_view: true,
+      pedidos_edit: false,
+      alertas_view: true,
+      alertas_edit: false,
       gerenciar_usuario: false,
     });
     fetchUsers();
@@ -282,27 +318,128 @@ export default function Users() {
 
               <div className="space-y-4 mt-6">
                 <Label className="text-base font-semibold">Permissões do Usuário</Label>
-                {Object.entries(permissions).map(([key, value]) => (
-                  <div key={key} className="flex items-center space-x-2">
+                
+                <div className="space-y-3">
+                  <div className="font-medium text-sm">Cadastro de Produtos</div>
+                  <div className="flex gap-4 ml-4">
+                    <div className="flex items-center space-x-2">
                     <Checkbox
-                      id={`new-${key}`}
-                      checked={value}
+                      id="new-cadastro_view"
+                      checked={permissions.cadastro_view}
                       onCheckedChange={(checked) =>
-                        setPermissions({ ...permissions, [key]: checked })
+                        setPermissions({ ...permissions, cadastro_view: !!checked })
                       }
                     />
-                    <label
-                      htmlFor={`new-${key}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {key === "cadastro" && "Cadastro de Produtos"}
-                      {key === "terminal" && "Terminal de Vendas"}
-                      {key === "pedidos" && "Pedidos"}
-                      {key === "alertas" && "Alertas"}
-                      {key === "gerenciar_usuario" && "Gerenciar Usuário"}
+                      <label htmlFor="new-cadastro_view" className="text-sm">Visualizar</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-cadastro_edit"
+                      checked={permissions.cadastro_edit}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, cadastro_edit: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-cadastro_edit" className="text-sm">Editar</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="font-medium text-sm">Terminal de Vendas</div>
+                  <div className="flex gap-4 ml-4">
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-terminal_view"
+                      checked={permissions.terminal_view}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, terminal_view: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-terminal_view" className="text-sm">Visualizar</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-terminal_edit"
+                      checked={permissions.terminal_edit}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, terminal_edit: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-terminal_edit" className="text-sm">Editar</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="font-medium text-sm">Pedidos</div>
+                  <div className="flex gap-4 ml-4">
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-pedidos_view"
+                      checked={permissions.pedidos_view}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, pedidos_view: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-pedidos_view" className="text-sm">Visualizar</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-pedidos_edit"
+                      checked={permissions.pedidos_edit}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, pedidos_edit: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-pedidos_edit" className="text-sm">Editar</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="font-medium text-sm">Alertas</div>
+                  <div className="flex gap-4 ml-4">
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-alertas_view"
+                      checked={permissions.alertas_view}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, alertas_view: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-alertas_view" className="text-sm">Visualizar</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-alertas_edit"
+                      checked={permissions.alertas_edit}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, alertas_edit: !!checked })
+                      }
+                    />
+                      <label htmlFor="new-alertas_edit" className="text-sm">Editar</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="new-gerenciar_usuario"
+                    checked={permissions.gerenciar_usuario}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, gerenciar_usuario: !!checked })
+                    }
+                  />
+                    <label htmlFor="new-gerenciar_usuario" className="text-sm font-medium">
+                      Gerenciar Usuário
                     </label>
                   </div>
-                ))}
+                  <div className="ml-6 text-sm text-muted-foreground">
+                    {permissions.gerenciar_usuario ? "Tipo: Admin" : "Tipo: Usuário"}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -312,10 +449,14 @@ export default function Users() {
                 setIsCreating(false);
                 setNewUser({ nome: "", email: "", senha: "" });
                 setPermissions({
-                  cadastro: false,
-                  terminal: false,
-                  pedidos: false,
-                  alertas: true,
+                  cadastro_view: false,
+                  cadastro_edit: false,
+                  terminal_view: true,
+                  terminal_edit: false,
+                  pedidos_view: true,
+                  pedidos_edit: false,
+                  alertas_view: true,
+                  alertas_edit: false,
                   gerenciar_usuario: false,
                 });
               }}>
@@ -330,27 +471,127 @@ export default function Users() {
             </h3>
 
             <div className="space-y-4 mb-6">
-              {Object.entries(permissions).map(([key, value]) => (
-                <div key={key} className="flex items-center space-x-2">
+              <div className="space-y-3">
+                <div className="font-medium text-sm">Cadastro de Produtos</div>
+                <div className="flex gap-4 ml-4">
+                  <div className="flex items-center space-x-2">
                   <Checkbox
-                    id={key}
-                    checked={value}
+                    id="cadastro_view"
+                    checked={permissions.cadastro_view}
                     onCheckedChange={(checked) =>
-                      setPermissions({ ...permissions, [key]: checked })
+                      setPermissions({ ...permissions, cadastro_view: !!checked })
                     }
                   />
-                  <label
-                    htmlFor={key}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {key === "cadastro" && "Cadastro de Produtos"}
-                    {key === "terminal" && "Terminal de Vendas"}
-                    {key === "pedidos" && "Pedidos"}
-                    {key === "alertas" && "Alertas"}
-                    {key === "gerenciar_usuario" && "Gerenciar Usuário"}
+                    <label htmlFor="cadastro_view" className="text-sm">Visualizar</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="cadastro_edit"
+                    checked={permissions.cadastro_edit}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, cadastro_edit: !!checked })
+                    }
+                  />
+                    <label htmlFor="cadastro_edit" className="text-sm">Editar</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="font-medium text-sm">Terminal de Vendas</div>
+                <div className="flex gap-4 ml-4">
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="terminal_view"
+                    checked={permissions.terminal_view}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, terminal_view: !!checked })
+                    }
+                  />
+                    <label htmlFor="terminal_view" className="text-sm">Visualizar</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="terminal_edit"
+                    checked={permissions.terminal_edit}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, terminal_edit: !!checked })
+                    }
+                  />
+                    <label htmlFor="terminal_edit" className="text-sm">Editar</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="font-medium text-sm">Pedidos</div>
+                <div className="flex gap-4 ml-4">
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="pedidos_view"
+                    checked={permissions.pedidos_view}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, pedidos_view: !!checked })
+                    }
+                  />
+                    <label htmlFor="pedidos_view" className="text-sm">Visualizar</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="pedidos_edit"
+                    checked={permissions.pedidos_edit}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, pedidos_edit: !!checked })
+                    }
+                  />
+                    <label htmlFor="pedidos_edit" className="text-sm">Editar</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="font-medium text-sm">Alertas</div>
+                <div className="flex gap-4 ml-4">
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="alertas_view"
+                    checked={permissions.alertas_view}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, alertas_view: !!checked })
+                    }
+                  />
+                    <label htmlFor="alertas_view" className="text-sm">Visualizar</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="alertas_edit"
+                    checked={permissions.alertas_edit}
+                    onCheckedChange={(checked) =>
+                      setPermissions({ ...permissions, alertas_edit: !!checked })
+                    }
+                  />
+                    <label htmlFor="alertas_edit" className="text-sm">Editar</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="gerenciar_usuario"
+                  checked={permissions.gerenciar_usuario}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, gerenciar_usuario: !!checked })
+                  }
+                />
+                  <label htmlFor="gerenciar_usuario" className="text-sm font-medium">
+                    Gerenciar Usuário
                   </label>
                 </div>
-              ))}
+                <div className="ml-6 text-sm text-muted-foreground">
+                  {permissions.gerenciar_usuario ? "Tipo: Admin" : "Tipo: Usuário"}
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2">
