@@ -145,9 +145,30 @@ export default function Users() {
       return;
     }
 
-    toast({ title: "Usuário criado com sucesso! Senha padrão: Temp100@" });
+    // Update user profile with permissions
+    if (authData?.user) {
+      await supabase
+        .from("profiles")
+        .update({ 
+          permissoes: permissions,
+          senha_temporaria: !newUser.senha || newUser.senha === "Temp100@"
+        })
+        .eq("id", authData.user.id);
+    }
+
+    toast({ 
+      title: "Usuário criado com sucesso!", 
+      description: newUser.senha ? `Senha definida: ${senhaFinal}` : "Senha padrão: Temp100@" 
+    });
     setIsCreating(false);
     setNewUser({ nome: "", email: "", senha: "" });
+    setPermissions({
+      cadastro: false,
+      terminal: false,
+      pedidos: false,
+      alertas: true,
+      gerenciar_usuario: false,
+    });
     fetchUsers();
   };
 
@@ -258,6 +279,31 @@ export default function Users() {
                   placeholder="Temp100@"
                 />
               </div>
+
+              <div className="space-y-4 mt-6">
+                <Label className="text-base font-semibold">Permissões do Usuário</Label>
+                {Object.entries(permissions).map(([key, value]) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`new-${key}`}
+                      checked={value}
+                      onCheckedChange={(checked) =>
+                        setPermissions({ ...permissions, [key]: checked })
+                      }
+                    />
+                    <label
+                      htmlFor={`new-${key}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {key === "cadastro" && "Cadastro de Produtos"}
+                      {key === "terminal" && "Terminal de Vendas"}
+                      {key === "pedidos" && "Pedidos"}
+                      {key === "alertas" && "Alertas"}
+                      {key === "gerenciar_usuario" && "Gerenciar Usuário"}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="flex gap-2">
@@ -265,6 +311,13 @@ export default function Users() {
               <Button variant="outline" onClick={() => {
                 setIsCreating(false);
                 setNewUser({ nome: "", email: "", senha: "" });
+                setPermissions({
+                  cadastro: false,
+                  terminal: false,
+                  pedidos: false,
+                  alertas: true,
+                  gerenciar_usuario: false,
+                });
               }}>
                 Cancelar
               </Button>

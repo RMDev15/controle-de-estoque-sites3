@@ -11,6 +11,8 @@ import Sales from "./pages/Sales";
 import Orders from "./pages/Orders";
 import Alerts from "./pages/Alerts";
 import Users from "./pages/Users";
+import ForgotPassword from "./pages/ForgotPassword";
+import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +44,8 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/change-password" element={<ChangePassword />} />
             <Route
               path="/dashboard"
               element={
