@@ -3,6 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import logo from "@/assets/logo.jpg";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import StockMovementChart from "@/components/charts/StockMovementChart";
+import MonthlySalesChart from "@/components/charts/MonthlySalesChart";
 
 export default function Dashboard() {
   const { profile, isAdmin, signOut, loading } = useAuth();
@@ -50,10 +59,18 @@ export default function Dashboard() {
             {/* Left side - Logo or Charts */}
             <div className="lg:w-1/2 flex items-center justify-center bg-primary/10 rounded-lg p-8">
               {isAdmin ? (
-                <div className="w-full">
-                  <h3 className="text-xl font-bold mb-4">Histórico de Entrada e Saída</h3>
-                  <p className="text-muted-foreground">Gráfico será implementado aqui</p>
-                </div>
+                <Carousel className="w-full max-w-lg">
+                  <CarouselContent>
+                    <CarouselItem>
+                      <StockMovementChart />
+                    </CarouselItem>
+                    <CarouselItem>
+                      <MonthlySalesChart />
+                    </CarouselItem>
+                  </CarouselContent>
+                  <CarouselPrevious className="left-2" />
+                  <CarouselNext className="right-2" />
+                </Carousel>
               ) : (
                 <img src={logo} alt="Só Bujigangas" className="w-64 h-auto" />
               )}
