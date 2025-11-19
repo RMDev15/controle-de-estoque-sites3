@@ -15,12 +15,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<any>(null);
   const [newUser, setNewUser] = useState({
     nome: "",
     email: "",
@@ -182,6 +193,40 @@ export default function Users() {
     fetchUsers();
   };
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    // Proteger o master admin
+    if (userToDelete.email === "ramonmatos390@gmail.com") {
+      toast({
+        title: "Ação não permitida",
+        description: "O usuário master admin não pode ser excluído",
+        variant: "destructive",
+      });
+      setUserToDelete(null);
+      return;
+    }
+
+    // Delete user from auth (will cascade to profiles and user_roles)
+    const { error } = await supabase.auth.admin.deleteUser(userToDelete.id);
+
+    if (error) {
+      toast({
+        title: "Erro ao excluir usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Usuário excluído com sucesso!",
+        description: `${userToDelete.nome} foi removido do sistema.`,
+      });
+      fetchUsers();
+    }
+
+    setUserToDelete(null);
+  };
+
   const handleCreateUser = async () => {
     if (!newUser.nome || !newUser.email) {
       toast({
@@ -321,13 +366,22 @@ export default function Users() {
                             Editar
                           </Button>
                           {!isMasterAdmin && (
-                            <Button
-                              size="sm"
-                              variant={isAdmin ? "destructive" : "default"}
-                              onClick={() => toggleAdmin(user.id, isAdmin, user.email)}
-                            >
-                              {isAdmin ? "Remover Admin" : "Tornar Admin"}
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant={isAdmin ? "destructive" : "default"}
+                                onClick={() => toggleAdmin(user.id, isAdmin, user.email)}
+                              >
+                                {isAdmin ? "Remover Admin" : "Tornar Admin"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => setUserToDelete(user)}
+                              >
+                                Excluir
+                              </Button>
+                            </>
                           )}
                         </div>
                       </TableCell>
@@ -704,6 +758,28 @@ export default function Users() {
           </div>
         )}
       </Card>
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o usuário <strong>{userToDelete?.nome}</strong>?
+              <br />
+              Esta ação não pode ser desfeita e todos os dados do usuário serão permanentemente removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
