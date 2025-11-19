@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -19,6 +20,12 @@ export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [newUser, setNewUser] = useState({
+    nome: "",
+    email: "",
+    senha: "",
+  });
   const [permissions, setPermissions] = useState({
     cadastro: false,
     terminal: false,
@@ -96,6 +103,41 @@ export default function Users() {
     fetchUsers();
   };
 
+  const handleCreateUser = async () => {
+    if (!newUser.nome || !newUser.email || !newUser.senha) {
+      toast({
+        title: "Erro",
+        description: "Preencha todos os campos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: newUser.email,
+      password: newUser.senha,
+      options: {
+        data: {
+          nome: newUser.nome,
+        },
+      },
+    });
+
+    if (authError) {
+      toast({
+        title: "Erro",
+        description: authError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Usuário criado com sucesso!" });
+    setIsCreating(false);
+    setNewUser({ nome: "", email: "", senha: "" });
+    fetchUsers();
+  };
+
   return (
     <div className="min-h-screen bg-primary p-4">
       <Card className="max-w-7xl mx-auto p-6">
@@ -106,15 +148,18 @@ export default function Users() {
           </Button>
         </div>
 
-        {!selectedUser ? (
+        {!selectedUser && !isCreating ? (
           <>
-            <div className="mb-6">
+            <div className="mb-6 flex gap-4">
               <Input
                 placeholder="Digite o Nome para buscar"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-md"
               />
+              <Button onClick={() => setIsCreating(true)}>
+                Novo Usuário
+              </Button>
             </div>
 
             <Table>
@@ -164,6 +209,54 @@ export default function Users() {
               </TableBody>
             </Table>
           </>
+        ) : isCreating ? (
+          <div className="max-w-2xl">
+            <h3 className="text-xl font-bold mb-4">Criar Novo Usuário</h3>
+
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="nome">Nome</Label>
+                <Input
+                  id="nome"
+                  value={newUser.nome}
+                  onChange={(e) => setNewUser({ ...newUser, nome: e.target.value })}
+                  placeholder="Nome completo"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="senha">Senha</Label>
+                <Input
+                  id="senha"
+                  type="password"
+                  value={newUser.senha}
+                  onChange={(e) => setNewUser({ ...newUser, senha: e.target.value })}
+                  placeholder="Senha temporária"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleCreateUser}>Criar Usuário</Button>
+              <Button variant="outline" onClick={() => {
+                setIsCreating(false);
+                setNewUser({ nome: "", email: "", senha: "" });
+              }}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="max-w-2xl">
             <h3 className="text-xl font-bold mb-4">
