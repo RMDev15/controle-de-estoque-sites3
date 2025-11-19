@@ -20,8 +20,9 @@ export default function Dashboard() {
   });
 
   const hasPermission = (permission: string) => {
-    const result = isAdmin || profile?.permissoes?.[permission] === true;
-    console.log(`Permission check for ${permission}:`, result, profile?.permissoes);
+    const value = profile?.permissoes?.[permission as keyof typeof profile.permissoes];
+    const result = isAdmin || value === true || value === "true";
+    console.log(`Permission check for ${permission}:`, { result, value, permissoes: profile?.permissoes });
     return result;
   };
 
