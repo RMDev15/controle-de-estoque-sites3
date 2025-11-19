@@ -57,15 +57,19 @@ export default function Dashboard() {
         <Card className="p-8">
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Left side - Logo or Charts */}
-            <div className="lg:w-1/2 flex items-center justify-center bg-primary/10 rounded-lg p-8">
+            <div className="lg:w-1/2 flex items-center justify-center bg-primary/10 rounded-lg p-4">
               {isAdmin ? (
-                <Carousel className="w-full max-w-lg">
+                <Carousel className="w-full">
                   <CarouselContent>
                     <CarouselItem>
-                      <StockMovementChart />
+                      <div className="max-h-[600px] overflow-y-auto">
+                        <StockMovementChart />
+                      </div>
                     </CarouselItem>
                     <CarouselItem>
-                      <MonthlySalesChart />
+                      <div className="max-h-[600px] overflow-y-auto">
+                        <MonthlySalesChart />
+                      </div>
                     </CarouselItem>
                   </CarouselContent>
                   <CarouselPrevious className="left-2" />
