@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,12 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -19,12 +25,17 @@ export default function Sales() {
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [valorPago, setValorPago] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchProducts();
+    // Auto focus on search input for barcode scanner
+    searchInputRef.current?.focus();
   }, []);
 
   const fetchProducts = async () => {
@@ -38,8 +49,32 @@ export default function Sales() {
 
   const filteredProducts = products.filter((p) =>
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+    p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchTerm.trim()) {
+      // Search by barcode or code
+      const product = products.find(
+        (p) =>
+          p.codigo_barras === searchTerm.trim() ||
+          p.codigo === searchTerm.trim()
+      );
+
+      if (product) {
+        addToCart(product);
+        setSearchTerm("");
+        searchInputRef.current?.focus();
+      } else {
+        toast({
+          title: "Produto não encontrado",
+          description: `Código/Código de barras: ${searchTerm}`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   const addToCart = (product: any) => {
     const existing = cart.find((item) => item.id === product.id);
@@ -85,7 +120,7 @@ export default function Sales() {
     );
   };
 
-  const finalizeSale = async () => {
+  const openPaymentDialog = () => {
     if (cart.length === 0) {
       toast({
         title: "Carrinho vazio",
@@ -93,9 +128,23 @@ export default function Sales() {
       });
       return;
     }
+    setShowPaymentDialog(true);
+  };
+
+  const finalizeSale = async () => {
+    const valorPagoNum = parseFloat(valorPago);
+    const total = calculateTotal();
+
+    if (isNaN(valorPagoNum) || valorPagoNum < total) {
+      toast({
+        title: "Valor insuficiente",
+        description: "O valor pago deve ser maior ou igual ao total",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const saleCode = `VD${Date.now()}`;
-    const total = calculateTotal();
 
     // Create sale
     const { data: saleData, error: saleError } = await supabase
@@ -145,13 +194,18 @@ export default function Sales() {
       });
     }
 
+    const troco = valorPagoNum - total;
+
     toast({
       title: "Venda finalizada!",
-      description: `Total: R$ ${total.toFixed(2)}`,
+      description: `Total: R$ ${total.toFixed(2)} | Troco: R$ ${troco.toFixed(2)}`,
     });
 
     setCart([]);
+    setShowPaymentDialog(false);
+    setValorPago("");
     fetchProducts();
+    searchInputRef.current?.focus();
   };
 
   return (
@@ -169,9 +223,11 @@ export default function Sales() {
           <div>
             <h3 className="font-bold mb-4">Selecionar Produtos</h3>
             <Input
-              placeholder="Buscar por Código ou Nome"
+              ref={searchInputRef}
+              placeholder="Buscar por Código, Código de Barras ou Nome (aperte Enter)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
               className="mb-4"
             />
 
@@ -244,7 +300,7 @@ export default function Sales() {
                   </div>
                   <Button
                     className="w-full bg-status-green hover:bg-status-green/90"
-                    onClick={finalizeSale}
+                    onClick={openPaymentDialog}
                   >
                     Finalizar Venda
                   </Button>
@@ -254,6 +310,65 @@ export default function Sales() {
           </div>
         </div>
       </Card>
+
+      {/* Payment Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalizar Pagamento</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-2">Total da Venda</p>
+              <p className="text-3xl font-bold text-primary">
+                R$ {calculateTotal().toFixed(2)}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Valor Pago pelo Cliente</label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="R$ 0,00"
+                value={valorPago}
+                onChange={(e) => setValorPago(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            {valorPago && parseFloat(valorPago) >= calculateTotal() && (
+              <div className="text-center p-4 bg-status-green/10 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Troco</p>
+                <p className="text-2xl font-bold text-status-green">
+                  R$ {(parseFloat(valorPago) - calculateTotal()).toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowPaymentDialog(false);
+                  setValorPago("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-status-green hover:bg-status-green/90"
+                onClick={finalizeSale}
+                disabled={!valorPago || parseFloat(valorPago) < calculateTotal()}
+              >
+                Confirmar Venda
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
