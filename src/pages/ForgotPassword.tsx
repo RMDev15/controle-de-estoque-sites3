@@ -35,7 +35,7 @@ export default function ForgotPassword() {
         .from("profiles")
         .select("email")
         .eq("email", email)
-        .single();
+        .maybeSingle();
 
       if (!profile) {
         toast({
