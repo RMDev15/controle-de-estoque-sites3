@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { toast } from "@/components/ui/use-toast";
 import {
   Table,
   TableBody,
@@ -16,6 +18,15 @@ import {
 export default function Alerts() {
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [alertRanges, setAlertRanges] = useState({
+    verde_min: 501,
+    verde_max: 1000,
+    amarelo_min: 201,
+    amarelo_max: 500,
+    vermelho_min: 0,
+    vermelho_max: 200,
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,91 +62,266 @@ export default function Alerts() {
     return { color: "sem_cor", label: "Sem alerta" };
   };
 
-  const getStatusColor = (color: string) => {
-    switch (color) {
-      case "verde":
-        return "bg-status-green text-white";
-      case "amarelo":
-        return "bg-status-yellow text-black";
-      case "vermelho":
-        return "bg-status-red text-white";
-      default:
-        return "bg-muted text-muted-foreground";
+  const handleSelectProduct = (product: any) => {
+    setSelectedProduct(product);
+    const alert = product.stock_alerts?.[0];
+    if (alert) {
+      setAlertRanges({
+        verde_min: alert.nivel_verde_min,
+        verde_max: alert.nivel_verde_max,
+        amarelo_min: alert.nivel_amarelo_min,
+        amarelo_max: alert.nivel_amarelo_max,
+        vermelho_min: 0,
+        vermelho_max: alert.nivel_vermelho_max,
+      });
     }
   };
+
+  const handleSaveAlertRanges = async () => {
+    if (!selectedProduct) return;
+
+    const alert = selectedProduct.stock_alerts?.[0];
+    
+    const alertData = {
+      product_id: selectedProduct.id,
+      nivel_verde_min: alertRanges.verde_min,
+      nivel_verde_max: alertRanges.verde_max,
+      nivel_amarelo_min: alertRanges.amarelo_min,
+      nivel_amarelo_max: alertRanges.amarelo_max,
+      nivel_vermelho_max: alertRanges.vermelho_max,
+    };
+
+    if (alert) {
+      const { error } = await supabase
+        .from("stock_alerts")
+        .update(alertData)
+        .eq("id", alert.id);
+
+      if (error) {
+        toast({
+          title: "Erro ao atualizar alerta",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("stock_alerts")
+        .insert(alertData);
+
+      if (error) {
+        toast({
+          title: "Erro ao criar alerta",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    toast({
+      title: "Alerta atualizado",
+      description: "Faixas de alerta salvas com sucesso!",
+    });
+
+    setSelectedProduct(null);
+    fetchProductsWithAlerts();
+  };
+
+  const productsWithAlerts = filteredProducts.filter((p) => getStockStatus(p).color !== "sem_cor");
 
   return (
     <div className="min-h-screen bg-primary p-4">
       <Card className="max-w-7xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Alertas</h1>
+          <h1 className="text-2xl font-bold text-blue-600">Alertas</h1>
           <Button variant="outline" onClick={() => navigate("/dashboard")}>
             Voltar
           </Button>
         </div>
 
-        <div className="mb-6">
-          <Input
-            placeholder="Busque pelo Código ou Produto"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
+        <div className="bg-cyan-400 p-6 rounded-lg">
+          <div className="mb-6">
+            <Input
+              placeholder="Busque pelo Código ou Produto"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-md bg-white"
+            />
+          </div>
 
-        <div className="space-y-6">
-          {["verde", "amarelo", "vermelho"].map((colorFilter) => {
-            const filtered = filteredProducts.filter(
-              (p) => getStockStatus(p).color === colorFilter
-            );
+          <div className="flex gap-6">
+            <div className="flex-1">
+              <p className="text-center mb-2 font-semibold">
+                Selecione o item para editar a faixa de alerta
+              </p>
+              <p className="text-center mb-4 font-semibold">Produtos com alerta</p>
 
-            if (filtered.length === 0) return null;
+              <div className="space-y-6">
+                {["vermelho", "amarelo"].map((colorFilter) => {
+                  const filtered = productsWithAlerts.filter(
+                    (p) => getStockStatus(p).color === colorFilter
+                  );
 
-            return (
-              <div key={colorFilter}>
-                <div
-                  className={`${getStatusColor(colorFilter)} px-4 py-2 rounded-t-lg font-bold text-center uppercase`}
-                >
-                  {colorFilter}
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Estoque</TableHead>
-                      <TableHead>Realizar Pedido</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell>{product.codigo}</TableCell>
-                        <TableCell>{product.nome}</TableCell>
-                        <TableCell>{product.estoque_atual}</TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/orders?product=${product.id}`)}
-                          >
-                            📋
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                  if (filtered.length === 0) return null;
+
+                  return (
+                    <div key={colorFilter}>
+                      <div
+                        className={`${
+                          colorFilter === "vermelho"
+                            ? "bg-red-600"
+                            : "bg-yellow-400"
+                        } px-4 py-2 rounded-t-lg font-bold text-center uppercase text-black`}
+                      >
+                        {colorFilter}
+                      </div>
+                      <Table className="bg-white">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Código</TableHead>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Realizar Pedido</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filtered.map((product) => (
+                            <TableRow
+                              key={product.id}
+                              className={`cursor-pointer hover:bg-gray-100 ${
+                                selectedProduct?.id === product.id ? "bg-gray-200" : ""
+                              }`}
+                              onClick={() => handleSelectProduct(product)}
+                            >
+                              <TableCell>{product.codigo}</TableCell>
+                              <TableCell>{product.nome}</TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/orders?product=${product.id}`);
+                                  }}
+                                >
+                                  📋
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-        {filteredProducts.length === 0 && (
-          <p className="text-center text-muted-foreground py-8">
-            Nenhum produto encontrado
-          </p>
-        )}
+            <div className="w-80 space-y-4">
+              <div className="bg-green-500 p-4 rounded-lg">
+                <div className="text-center font-bold text-white mb-2">VERDE</div>
+                <div className="text-center text-white text-sm mb-3">
+                  Quantidade em estoque
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Input
+                    type="number"
+                    value={alertRanges.verde_min}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, verde_min: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled={!selectedProduct}
+                  />
+                  <span className="text-white">Até</span>
+                  <Input
+                    type="number"
+                    value={alertRanges.verde_max}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, verde_max: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled={!selectedProduct}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-yellow-400 p-4 rounded-lg">
+                <div className="text-center font-bold text-black mb-2">AMARELO</div>
+                <div className="text-center text-black text-sm mb-3">
+                  Quantidade em estoque
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Input
+                    type="number"
+                    value={alertRanges.amarelo_min}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, amarelo_min: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled={!selectedProduct}
+                  />
+                  <span className="text-black">Até</span>
+                  <Input
+                    type="number"
+                    value={alertRanges.amarelo_max}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, amarelo_max: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled={!selectedProduct}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-red-600 p-4 rounded-lg">
+                <div className="text-center font-bold text-white mb-2">VERMELHO</div>
+                <div className="text-center text-white text-sm mb-3">
+                  Quantidade em estoque
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Input
+                    type="number"
+                    value={alertRanges.vermelho_min}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, vermelho_min: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled
+                  />
+                  <span className="text-white">Até</span>
+                  <Input
+                    type="number"
+                    value={alertRanges.vermelho_max}
+                    onChange={(e) =>
+                      setAlertRanges({ ...alertRanges, vermelho_max: Number(e.target.value) })
+                    }
+                    className="w-20 bg-white text-center"
+                    disabled={!selectedProduct}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600"
+                  onClick={() => navigate("/dashboard")}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600"
+                  onClick={handleSaveAlertRanges}
+                  disabled={!selectedProduct}
+                >
+                  Concluir
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );
