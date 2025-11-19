@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +30,21 @@ export default function Products() {
     fornecedor: "",
     foto_url: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (selectedProduct && selectedProduct.foto_url) {
+      setImagePreview(selectedProduct.foto_url);
+    }
+  }, [selectedProduct]);
 
   const fetchProducts = async () => {
     const { data } = await supabase
@@ -116,6 +125,38 @@ export default function Products() {
     return "";
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setImagePreview(result);
+        setFormData({ ...formData, foto_url: result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleEditClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const getNextCodigo = async () => {
+    const { data } = await supabase
+      .from("products")
+      .select("codigo")
+      .order("codigo", { ascending: false })
+      .limit(1);
+    
+    if (data && data.length > 0) {
+      const lastCode = parseInt(data[0].codigo) || 0;
+      return String(lastCode + 1).padStart(3, "0");
+    }
+    return "001";
+  };
+
   const resetForm = () => {
     setFormData({
       codigo: "",
@@ -130,6 +171,8 @@ export default function Products() {
       foto_url: "",
     });
     setSelectedProduct(null);
+    setImageFile(null);
+    setImagePreview("");
   };
 
   return (
@@ -154,7 +197,11 @@ export default function Products() {
             </div>
 
             <div className="mb-4">
-              <Button onClick={() => setSelectedProduct({})}>
+              <Button onClick={async () => {
+                const nextCodigo = await getNextCodigo();
+                setSelectedProduct({});
+                setFormData({ ...formData, codigo: nextCodigo });
+              }}>
                 Novo Cadastro
               </Button>
             </div>
@@ -208,16 +255,33 @@ export default function Products() {
             <div className="flex gap-6">
               {/* Left side - Photo upload */}
               <div className="w-48 space-y-4">
-                <div className="border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center h-48 bg-muted/50">
-                  {formData.foto_url ? (
-                    <img src={formData.foto_url} alt="Produto" className="max-h-full max-w-full object-contain" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center h-48 bg-muted/50 overflow-hidden">
+                  {imagePreview || formData.foto_url ? (
+                    <img 
+                      src={imagePreview || formData.foto_url} 
+                      alt="Produto" 
+                      className="max-h-full max-w-full object-cover rounded"
+                    />
                   ) : (
                     <div className="text-center text-sm text-muted-foreground">
                       Fazer upload do Computador
                     </div>
                   )}
                 </div>
-                <Button type="button" size="sm" className="w-full" variant="outline">
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  className="w-full" 
+                  variant="outline"
+                  onClick={handleEditClick}
+                >
                   Editar
                 </Button>
                 <div className="text-sm">
@@ -229,7 +293,7 @@ export default function Products() {
                   />
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium mb-1">Código: {formData.codigo || "Auto"}</div>
+                  <div className="font-medium mb-1">Código: {formData.codigo || "..."}</div>
                 </div>
               </div>
 
