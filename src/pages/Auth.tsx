@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,21 @@ export default function Auth() {
     try {
       const { error } = await signIn(email, password);
       if (error) throw error;
+
+      // Check if user has temporary password
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("senha_temporaria")
+        .eq("email", email)
+        .single();
+
+      if (profile?.senha_temporaria) {
+        toast({
+          title: "Atenção",
+          description: "Você precisa alterar sua senha temporária",
+        });
+        navigate("/change-password");
+      }
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -73,7 +89,17 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                <Button
+                  variant="link"
+                  className="px-0 font-normal text-sm text-primary"
+                  type="button"
+                  onClick={() => navigate("/forgot-password")}
+                >
+                  Esqueci a senha
+                </Button>
+              </div>
               <Input
                 id="password"
                 type="password"
