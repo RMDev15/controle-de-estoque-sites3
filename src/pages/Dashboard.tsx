@@ -20,14 +20,11 @@ export default function Dashboard() {
   });
 
   const hasPermission = (permission: string) => {
-    const permissoes: any = profile?.permissoes || {};
-    const result =
-      isAdmin ||
-      permissoes[permission] === true ||
-      permissoes[`${permission}_view`] === true;
-    console.log(`Permission check for ${permission}:`, result, permissoes);
+    const result = isAdmin || profile?.permissoes?.[permission] === true;
+    console.log(`Permission check for ${permission}:`, result, profile?.permissoes);
     return result;
   };
+
   return (
     <div className="min-h-screen bg-primary p-8">
       <div className="max-w-7xl mx-auto">
