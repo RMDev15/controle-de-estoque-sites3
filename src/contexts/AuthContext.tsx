@@ -57,46 +57,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST (no async or Supabase calls inside)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth state change:", event, session?.user?.id);
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        // Defer Supabase calls to avoid deadlocks
-        setTimeout(() => {
-          fetchProfile(session.user!.id).catch((error) => {
-            console.error("Error fetching profile from auth listener:", error);
-          });
-        }, 0);
-      } else {
-        setProfile(null);
-        setIsAdmin(false);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state change:", event, session?.user?.id);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Fetch profile immediately when user logs in
+        if (session?.user) {
+          try {
+            await fetchProfile(session.user.id);
+          } catch (error) {
+            console.error("Error fetching profile:", error);
+          }
+        } else {
+          setProfile(null);
+          setIsAdmin(false);
+        }
+        setLoading(false);
       }
-
-      setLoading(false);
-    });
+    );
 
     // THEN check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Initial session check:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
-
+      
       if (session?.user) {
         try {
           await fetchProfile(session.user.id);
         } catch (error) {
-          console.error("Error fetching profile on initial session:", error);
+          console.error("Error fetching profile:", error);
         }
-      } else {
-        setProfile(null);
-        setIsAdmin(false);
       }
-
       setLoading(false);
     });
 
