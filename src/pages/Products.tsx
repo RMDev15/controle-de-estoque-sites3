@@ -63,8 +63,33 @@ export default function Products() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // If no codigo, generate one
+    let codigoToUse = formData.codigo;
+    if (!codigoToUse) {
+      codigoToUse = await getNextCodigo();
+    }
+    
+    // Check if codigo already exists (only for new products)
+    if (!selectedProduct?.id) {
+      const { data: existing } = await supabase
+        .from("products")
+        .select("id")
+        .eq("codigo", codigoToUse)
+        .maybeSingle();
+      
+      if (existing) {
+        toast({
+          title: "Erro",
+          description: `Código ${codigoToUse} já existe. Gerando novo código...`,
+          variant: "destructive",
+        });
+        codigoToUse = await getNextCodigo();
+      }
+    }
+    
     const dataToSave = {
       ...formData,
+      codigo: codigoToUse,
       estoque_atual: parseInt(formData.estoque_atual) || 0,
       valor_unitario: parseFloat(formData.valor_unitario) || 0,
       valor_venda: parseFloat(formData.valor_venda) || 0,
@@ -146,13 +171,13 @@ export default function Products() {
   const getNextCodigo = async () => {
     const { data } = await supabase
       .from("products")
-      .select("codigo")
-      .order("codigo", { ascending: false })
-      .limit(1);
+      .select("codigo");
     
     if (data && data.length > 0) {
-      const lastCode = parseInt(data[0].codigo) || 0;
-      return String(lastCode + 1).padStart(3, "0");
+      // Convert all codes to numbers and find the maximum
+      const codes = data.map(p => parseInt(p.codigo) || 0);
+      const maxCode = Math.max(...codes);
+      return String(maxCode + 1).padStart(3, "0");
     }
     return "001";
   };
