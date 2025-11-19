@@ -12,8 +12,17 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
   }
 
+  // Debug log
+  console.log("Dashboard Debug:", { 
+    profile, 
+    isAdmin, 
+    permissoes: profile?.permissoes 
+  });
+
   const hasPermission = (permission: string) => {
-    return isAdmin || profile?.permissoes?.[permission] === true;
+    const result = isAdmin || profile?.permissoes?.[permission] === true;
+    console.log(`Permission check for ${permission}:`, result, profile?.permissoes);
+    return result;
   };
 
   return (
