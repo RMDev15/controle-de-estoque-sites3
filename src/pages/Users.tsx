@@ -104,24 +104,37 @@ export default function Users() {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.nome || !newUser.email || !newUser.senha) {
+    if (!newUser.nome || !newUser.email) {
       toast({
         title: "Erro",
-        description: "Preencha todos os campos",
+        description: "Preencha todos os campos obrigatórios",
         variant: "destructive",
       });
       return;
     }
 
+    const senhaFinal = newUser.senha || "Temp100@";
+
+    // Get current session to restore after
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: newUser.email,
-      password: newUser.senha,
+      password: senhaFinal,
       options: {
         data: {
           nome: newUser.nome,
         },
       },
     });
+
+    // Restore admin session immediately
+    if (currentSession) {
+      await supabase.auth.setSession({
+        access_token: currentSession.access_token,
+        refresh_token: currentSession.refresh_token,
+      });
+    }
 
     if (authError) {
       toast({
@@ -132,7 +145,7 @@ export default function Users() {
       return;
     }
 
-    toast({ title: "Usuário criado com sucesso!" });
+    toast({ title: "Usuário criado com sucesso! Senha padrão: Temp100@" });
     setIsCreating(false);
     setNewUser({ nome: "", email: "", senha: "" });
     fetchUsers();
@@ -236,13 +249,13 @@ export default function Users() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="senha">Senha</Label>
+                <Label htmlFor="senha">Senha (opcional - padrão: Temp100@)</Label>
                 <Input
                   id="senha"
                   type="password"
                   value={newUser.senha}
                   onChange={(e) => setNewUser({ ...newUser, senha: e.target.value })}
-                  placeholder="Senha temporária"
+                  placeholder="Temp100@"
                 />
               </div>
             </div>
