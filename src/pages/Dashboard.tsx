@@ -20,11 +20,28 @@ export default function Dashboard() {
   });
 
   const hasPermission = (permission: string) => {
-    const result = isAdmin || profile?.permissoes?.[permission] === true;
-    console.log(`Permission check for ${permission}:`, result, profile?.permissoes);
-    return result;
-  };
+    if (isAdmin) return true;
 
+    const perms: any = profile?.permissoes || {};
+
+    // Suporta formato antigo (permissoes.cadastro = true) e novo (cadastro_view/edit)
+    if (perms[permission] === true) {
+      return true;
+    }
+
+    switch (permission) {
+      case "cadastro":
+        return Boolean(perms.cadastro_view || perms.cadastro_edit);
+      case "terminal":
+        return Boolean(perms.terminal_view || perms.terminal_edit);
+      case "pedidos":
+        return Boolean(perms.pedidos_view || perms.pedidos_edit);
+      case "alertas":
+        return Boolean(perms.alertas_view || perms.alertas_edit);
+      default:
+        return false;
+    }
+  };
   return (
     <div className="min-h-screen bg-primary p-8">
       <div className="max-w-7xl mx-auto">
