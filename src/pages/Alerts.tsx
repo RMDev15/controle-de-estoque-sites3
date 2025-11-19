@@ -48,10 +48,17 @@ export default function Alerts() {
 
   const getStockStatus = (product: any) => {
     const stock = product.estoque_atual;
-    const alert = product.stock_alerts?.[0];
-    
-    if (!alert) return { color: "sem_cor", label: "Sem alerta" };
-    
+
+    // Usa as faixas salvas no banco para o produto ou, se não houver,
+    // aplica as faixas padrão (verde 501-1000, amarelo 201-500, vermelho até 200)
+    const alert = product.stock_alerts?.[0] || {
+      nivel_verde_min: 501,
+      nivel_verde_max: 1000,
+      nivel_amarelo_min: 201,
+      nivel_amarelo_max: 500,
+      nivel_vermelho_max: 200,
+    };
+
     if (stock >= alert.nivel_verde_min && stock <= alert.nivel_verde_max) {
       return { color: "verde", label: "Verde" };
     } else if (stock >= alert.nivel_amarelo_min && stock <= alert.nivel_amarelo_max) {
@@ -61,7 +68,6 @@ export default function Alerts() {
     }
     return { color: "sem_cor", label: "Sem alerta" };
   };
-
   const handleSelectProduct = (product: any) => {
     setSelectedProduct(product);
     const alert = product.stock_alerts?.[0];
