@@ -22,10 +22,13 @@ export default function Products() {
     codigo: "",
     nome: "",
     cor: "",
-    estoque_atual: 0,
-    valor_unitario: 0,
-    valor_venda: 0,
+    codigo_barras: "",
+    estoque_atual: "",
+    valor_unitario: "",
+    valor_venda: "",
+    markup: "",
     fornecedor: "",
+    foto_url: "",
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -44,20 +47,25 @@ export default function Products() {
 
   const filteredProducts = products.filter((p) =>
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+    p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const markup = formData.valor_venda > 0 && formData.valor_unitario > 0
-      ? ((formData.valor_venda - formData.valor_unitario) / formData.valor_unitario) * 100
-      : 0;
+    const dataToSave = {
+      ...formData,
+      estoque_atual: parseInt(formData.estoque_atual) || 0,
+      valor_unitario: parseFloat(formData.valor_unitario) || 0,
+      valor_venda: parseFloat(formData.valor_venda) || 0,
+      markup: parseFloat(formData.markup) || 0,
+    };
 
-    if (selectedProduct) {
+    if (selectedProduct?.id) {
       const { error } = await supabase
         .from("products")
-        .update({ ...formData, markup })
+        .update(dataToSave)
         .eq("id", selectedProduct.id);
       
       if (error) {
@@ -74,7 +82,7 @@ export default function Products() {
     } else {
       const { error } = await supabase
         .from("products")
-        .insert({ ...formData, markup });
+        .insert(dataToSave);
       
       if (error) {
         toast({
@@ -90,15 +98,36 @@ export default function Products() {
     }
   };
 
+  const calculateMarkup = (valorVenda: string, valorUnitario: string) => {
+    const venda = parseFloat(valorVenda) || 0;
+    const unitario = parseFloat(valorUnitario) || 0;
+    if (venda > 0 && unitario > 0) {
+      return (((venda - unitario) / unitario) * 100).toFixed(2);
+    }
+    return "";
+  };
+
+  const calculateValorVenda = (valorUnitario: string, markup: string) => {
+    const unitario = parseFloat(valorUnitario) || 0;
+    const markupNum = parseFloat(markup) || 0;
+    if (unitario > 0 && markupNum > 0) {
+      return (unitario * (1 + markupNum / 100)).toFixed(2);
+    }
+    return "";
+  };
+
   const resetForm = () => {
     setFormData({
       codigo: "",
       nome: "",
       cor: "",
-      estoque_atual: 0,
-      valor_unitario: 0,
-      valor_venda: 0,
+      codigo_barras: "",
+      estoque_atual: "",
+      valor_unitario: "",
+      valor_venda: "",
+      markup: "",
       fornecedor: "",
+      foto_url: "",
     });
     setSelectedProduct(null);
   };
@@ -117,7 +146,7 @@ export default function Products() {
           <>
             <div className="mb-6">
               <Input
-                placeholder="Buscar por Nome ou Código"
+                placeholder="Buscar por Nome, Código ou Código de Barras"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-md"
@@ -157,7 +186,13 @@ export default function Products() {
                         variant="outline"
                         onClick={() => {
                           setSelectedProduct(product);
-                          setFormData(product);
+                          setFormData({
+                            ...product,
+                            estoque_atual: product.estoque_atual?.toString() || "",
+                            valor_unitario: product.valor_unitario?.toString() || "",
+                            valor_venda: product.valor_venda?.toString() || "",
+                            markup: product.markup?.toString() || "",
+                          });
                         }}
                       >
                         Editar
@@ -169,76 +204,130 @@ export default function Products() {
             </Table>
           </>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Código</label>
-                <Input
-                  value={formData.codigo}
-                  onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                  required
-                />
+          <form onSubmit={handleSubmit} className="max-w-5xl">
+            <div className="flex gap-6">
+              {/* Left side - Photo upload */}
+              <div className="w-48 space-y-4">
+                <div className="border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center h-48 bg-muted/50">
+                  {formData.foto_url ? (
+                    <img src={formData.foto_url} alt="Produto" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <div className="text-center text-sm text-muted-foreground">
+                      Fazer upload do Computador
+                    </div>
+                  )}
+                </div>
+                <Button type="button" size="sm" className="w-full" variant="outline">
+                  Editar
+                </Button>
+                <div className="text-sm">
+                  <div className="font-medium mb-2">Código de barras:</div>
+                  <Input
+                    value={formData.codigo_barras}
+                    onChange={(e) => setFormData({ ...formData, codigo_barras: e.target.value })}
+                    placeholder="Digite o código"
+                  />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium mb-1">Código: {formData.codigo || "Auto"}</div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome</label>
-                <Input
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Cor</label>
-                <Input
-                  value={formData.cor}
-                  onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Estoque</label>
-                <Input
-                  type="number"
-                  value={formData.estoque_atual}
-                  onChange={(e) => setFormData({ ...formData, estoque_atual: parseInt(e.target.value) })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Valor Unitário</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.valor_unitario}
-                  onChange={(e) => setFormData({ ...formData, valor_unitario: parseFloat(e.target.value) })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Valor Venda</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.valor_venda}
-                  onChange={(e) => setFormData({ ...formData, valor_venda: parseFloat(e.target.value) })}
-                  required
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1">Fornecedor</label>
-                <Input
-                  value={formData.fornecedor}
-                  onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
-                />
-              </div>
-            </div>
 
-            <div className="flex gap-2">
-              <Button type="submit">
-                {selectedProduct?.id ? "Atualizar" : "Cadastrar"}
-              </Button>
-              <Button type="button" variant="outline" onClick={resetForm}>
-                Cancelar
-              </Button>
+              {/* Right side - Form fields */}
+              <div className="flex-1 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Nome:</label>
+                    <Input
+                      value={formData.nome}
+                      onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Cor:</label>
+                    <Input
+                      value={formData.cor}
+                      onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Quant. em Estoque:</label>
+                    <Input
+                      type="number"
+                      value={formData.estoque_atual}
+                      onChange={(e) => setFormData({ ...formData, estoque_atual: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Valor da unidade: R$</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.valor_unitario}
+                      onChange={(e) => {
+                        const newVal = e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          valor_unitario: newVal,
+                          markup: calculateMarkup(formData.valor_venda, newVal)
+                        });
+                      }}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Fornecedor:</label>
+                    <Input
+                      value={formData.fornecedor}
+                      onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Valor de venda: R$</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.valor_venda}
+                      onChange={(e) => {
+                        const newVal = e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          valor_venda: newVal,
+                          markup: calculateMarkup(newVal, formData.valor_unitario)
+                        });
+                      }}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium mb-1">Markup: %</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.markup}
+                      onChange={(e) => {
+                        const newMarkup = e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          markup: newMarkup,
+                          valor_venda: calculateValorVenda(formData.valor_unitario, newMarkup)
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <Button type="submit">
+                    Concluir
+                  </Button>
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
             </div>
           </form>
         )}
