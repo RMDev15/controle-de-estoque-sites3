@@ -26,21 +26,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   const fetchProfile = async (userId: string) => {
-    const { data: profileData } = await supabase
+    console.log("Fetching profile for user:", userId);
+    const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single();
     
-    const { data: rolesData } = await supabase
+    console.log("Profile data:", profileData, "Error:", profileError);
+    
+    const { data: rolesData, error: rolesError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
+    
+    console.log("Roles data:", rolesData, "Error:", rolesError);
     
     if (profileData) {
       setProfile(profileData);
       const hasAdminRole = rolesData?.some((ur: any) => ur.role === 'admin') || false;
       setIsAdmin(hasAdminRole);
+      console.log("Profile set:", profileData, "isAdmin:", hasAdminRole);
     }
   };
 
@@ -53,15 +59,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        console.log("Auth state change:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Defer profile fetch with setTimeout
+        // Fetch profile immediately when user logs in
         if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
+          try {
+            await fetchProfile(session.user.id);
+          } catch (error) {
+            console.error("Error fetching profile:", error);
+          }
         } else {
           setProfile(null);
           setIsAdmin(false);
@@ -71,14 +80,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log("Initial session check:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        setTimeout(() => {
-          fetchProfile(session.user.id);
-        }, 0);
+        try {
+          await fetchProfile(session.user.id);
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+        }
       }
       setLoading(false);
     });
