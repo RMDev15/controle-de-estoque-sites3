@@ -30,14 +30,23 @@ export default function Auth() {
       const { error } = await signIn(email, password);
       if (error) throw error;
 
-      // Check if user has temporary password
+      // Check if user has temporary password (only for non-admin users)
       const { data: profile } = await supabase
         .from("profiles")
         .select("senha_temporaria")
         .eq("email", email)
         .single();
 
-      if (profile?.senha_temporaria) {
+      // Check if user is admin
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id);
+
+      const isAdmin = rolesData?.some((ur: any) => ur.role === 'admin') || false;
+
+      // Only redirect non-admin users with temporary passwords
+      if (profile?.senha_temporaria && !isAdmin) {
         toast({
           title: "Atenção",
           description: "Você precisa alterar sua senha temporária",
