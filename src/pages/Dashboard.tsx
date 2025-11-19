@@ -8,9 +8,6 @@ export default function Dashboard() {
   const { profile, isAdmin, signOut, loading } = useAuth();
   const navigate = useNavigate();
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
-  }
 
   // Debug log
   console.log("Dashboard Debug:", { 
