@@ -14,7 +14,7 @@ export default function ChangePassword() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
 
   useEffect(() => {
     if (!user) {
@@ -70,6 +70,9 @@ export default function ChangePassword() {
           .from("profiles")
           .update({ senha_temporaria: false })
           .eq("id", user.id);
+        
+        // Refresh profile to get updated permissions
+        await refreshProfile();
       }
 
       toast({
