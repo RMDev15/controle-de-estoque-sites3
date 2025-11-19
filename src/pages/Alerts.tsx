@@ -132,33 +132,33 @@ export default function Alerts() {
   const productsWithAlerts = filteredProducts.filter((p) => getStockStatus(p).color !== "sem_cor");
 
   return (
-    <div className="min-h-screen bg-primary p-4">
-      <Card className="max-w-7xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-blue-600">Alertas</h1>
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+    <div className="min-h-screen bg-primary p-2 md:p-4">
+      <Card className="max-w-7xl mx-auto p-3 md:p-6">
+        <div className="flex justify-between items-center mb-4 md:mb-6">
+          <h1 className="text-xl md:text-2xl font-bold text-blue-600">Alertas</h1>
+          <Button variant="outline" onClick={() => navigate("/dashboard")} size="sm">
             Voltar
           </Button>
         </div>
 
-        <div className="bg-cyan-400 p-6 rounded-lg">
-          <div className="mb-6">
+        <div className="bg-cyan-400 p-3 md:p-6 rounded-lg">
+          <div className="mb-4 md:mb-6">
             <Input
               placeholder="Busque pelo Código ou Produto"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-md bg-white"
+              className="w-full bg-white"
             />
           </div>
 
-          <div className="flex gap-6">
+          <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
             <div className="flex-1">
-              <p className="text-center mb-2 font-semibold">
+              <p className="text-center mb-2 font-semibold text-sm md:text-base">
                 Selecione o item para editar a faixa de alerta
               </p>
-              <p className="text-center mb-4 font-semibold">Produtos com alerta</p>
+              <p className="text-center mb-4 font-semibold text-sm md:text-base">Produtos com alerta</p>
 
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 {["vermelho", "amarelo"].map((colorFilter) => {
                   const filtered = productsWithAlerts.filter(
                     (p) => getStockStatus(p).color === colorFilter
@@ -167,61 +167,70 @@ export default function Alerts() {
                   if (filtered.length === 0) return null;
 
                   return (
-                    <div key={colorFilter}>
+                    <div key={colorFilter} className="overflow-hidden rounded-lg">
                       <div
                         className={`${
                           colorFilter === "vermelho"
-                            ? "bg-red-600"
-                            : "bg-yellow-400"
-                        } px-4 py-2 rounded-t-lg font-bold text-center uppercase text-black`}
+                            ? "bg-red-600 text-white"
+                            : "bg-yellow-400 text-black"
+                        } px-3 py-2 font-bold text-center uppercase text-sm md:text-base`}
                       >
                         {colorFilter}
                       </div>
-                      <Table className="bg-white">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Código</TableHead>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>Realizar Pedido</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filtered.map((product) => (
-                            <TableRow
-                              key={product.id}
-                              className={`cursor-pointer hover:bg-gray-100 ${
-                                selectedProduct?.id === product.id ? "bg-gray-200" : ""
-                              }`}
-                              onClick={() => handleSelectProduct(product)}
-                            >
-                              <TableCell>{product.codigo}</TableCell>
-                              <TableCell>{product.nome}</TableCell>
-                              <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/orders?product=${product.id}`);
-                                  }}
-                                >
-                                  📋
-                                </Button>
-                              </TableCell>
+                      <div className="overflow-x-auto">
+                        <Table className="bg-white">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs md:text-sm">Código</TableHead>
+                              <TableHead className="text-xs md:text-sm">Nome</TableHead>
+                              <TableHead className="text-xs md:text-sm w-20">Realizar Pedido</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {filtered.map((product) => (
+                              <TableRow
+                                key={product.id}
+                                className={`cursor-pointer hover:bg-gray-100 ${
+                                  selectedProduct?.id === product.id ? "bg-gray-200" : ""
+                                }`}
+                                onClick={() => handleSelectProduct(product)}
+                              >
+                                <TableCell className="text-xs md:text-sm">{product.codigo}</TableCell>
+                                <TableCell className="text-xs md:text-sm">{product.nome}</TableCell>
+                                <TableCell className="text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/orders?product=${product.id}`);
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    📋
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   );
                 })}
+
+                {productsWithAlerts.length === 0 && (
+                  <div className="text-center py-8 text-gray-600">
+                    <p>Nenhum produto com alerta encontrado</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="w-80 space-y-4">
-              <div className="bg-green-500 p-4 rounded-lg">
-                <div className="text-center font-bold text-white mb-2">VERDE</div>
-                <div className="text-center text-white text-sm mb-3">
+            <div className="w-full lg:w-80 space-y-3 md:space-y-4">
+              <div className="bg-green-500 p-3 md:p-4 rounded-lg">
+                <div className="text-center font-bold text-white mb-2 text-sm md:text-base">VERDE</div>
+                <div className="text-center text-white text-xs md:text-sm mb-3">
                   Quantidade em estoque
                 </div>
                 <div className="flex items-center justify-center gap-2">
@@ -231,25 +240,25 @@ export default function Alerts() {
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, verde_min: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
-                  <span className="text-white">Até</span>
+                  <span className="text-white text-xs md:text-sm">Até</span>
                   <Input
                     type="number"
                     value={alertRanges.verde_max}
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, verde_max: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
                 </div>
               </div>
 
-              <div className="bg-yellow-400 p-4 rounded-lg">
-                <div className="text-center font-bold text-black mb-2">AMARELO</div>
-                <div className="text-center text-black text-sm mb-3">
+              <div className="bg-yellow-400 p-3 md:p-4 rounded-lg">
+                <div className="text-center font-bold text-black mb-2 text-sm md:text-base">AMARELO</div>
+                <div className="text-center text-black text-xs md:text-sm mb-3">
                   Quantidade em estoque
                 </div>
                 <div className="flex items-center justify-center gap-2">
@@ -259,25 +268,25 @@ export default function Alerts() {
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, amarelo_min: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
-                  <span className="text-black">Até</span>
+                  <span className="text-black text-xs md:text-sm">Até</span>
                   <Input
                     type="number"
                     value={alertRanges.amarelo_max}
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, amarelo_max: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
                 </div>
               </div>
 
-              <div className="bg-red-600 p-4 rounded-lg">
-                <div className="text-center font-bold text-white mb-2">VERMELHO</div>
-                <div className="text-center text-white text-sm mb-3">
+              <div className="bg-red-600 p-3 md:p-4 rounded-lg">
+                <div className="text-center font-bold text-white mb-2 text-sm md:text-base">VERMELHO</div>
+                <div className="text-center text-white text-xs md:text-sm mb-3">
                   Quantidade em estoque
                 </div>
                 <div className="flex items-center justify-center gap-2">
@@ -287,32 +296,32 @@ export default function Alerts() {
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, vermelho_min: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled
                   />
-                  <span className="text-white">Até</span>
+                  <span className="text-white text-xs md:text-sm">Até</span>
                   <Input
                     type="number"
                     value={alertRanges.vermelho_max}
                     onChange={(e) =>
                       setAlertRanges({ ...alertRanges, vermelho_max: Number(e.target.value) })
                     }
-                    className="w-20 bg-white text-center"
+                    className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-4">
+              <div className="flex gap-2 pt-2 md:pt-4">
                 <Button
                   variant="outline"
-                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600"
+                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600 text-sm md:text-base"
                   onClick={() => navigate("/dashboard")}
                 >
                   Voltar
                 </Button>
                 <Button
-                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600"
+                  className="flex-1 bg-blue-500 text-white hover:bg-blue-600 text-sm md:text-base"
                   onClick={handleSaveAlertRanges}
                   disabled={!selectedProduct}
                 >
