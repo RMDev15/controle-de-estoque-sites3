@@ -32,6 +32,8 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [userToDelete, setUserToDelete] = useState<any>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [newUser, setNewUser] = useState({
     nome: "",
     email: "",
@@ -51,6 +53,28 @@ export default function Users() {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Detectar mudanças não salvas
+  useEffect(() => {
+    if (isCreating || selectedUser) {
+      setHasUnsavedChanges(true);
+    } else {
+      setHasUnsavedChanges(false);
+    }
+  }, [isCreating, selectedUser, permissions, newUser, editPassword]);
+
+  // Prevenir saída com dados não salvos
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'Você tem alterações não salvas. Deseja realmente sair?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     fetchUsers();
@@ -161,8 +185,7 @@ export default function Users() {
     }
 
     toast({ title: "Permissões atualizadas com sucesso!" });
-    setSelectedUser(null);
-    setEditPassword("");
+    handleCancel();
     fetchUsers();
   };
 
@@ -207,24 +230,68 @@ export default function Users() {
       return;
     }
 
-    // Delete user from auth (will cascade to profiles and user_roles)
-    const { error } = await supabase.auth.admin.deleteUser(userToDelete.id);
+    try {
+      // First delete from profiles table (will also delete from user_roles due to cascade)
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", userToDelete.id);
 
-    if (error) {
-      toast({
-        title: "Erro ao excluir usuário",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+      if (profileError) {
+        throw profileError;
+      }
+
       toast({
         title: "Usuário excluído com sucesso!",
         description: `${userToDelete.nome} foi removido do sistema.`,
       });
+      
       fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir usuário",
+        description: error.message || "Ocorreu um erro ao excluir o usuário",
+        variant: "destructive",
+      });
     }
 
     setUserToDelete(null);
+  };
+
+  const handleCancelWithConfirmation = () => {
+    if (hasUnsavedChanges) {
+      setShowCancelDialog(true);
+    } else {
+      handleCancel();
+    }
+  };
+
+  const handleCancel = () => {
+    setIsCreating(false);
+    setSelectedUser(null);
+    setEditPassword("");
+    setNewUser({ nome: "", email: "", senha: "" });
+    setPermissions({
+      cadastro_view: false,
+      cadastro_edit: false,
+      terminal_view: true,
+      terminal_edit: false,
+      pedidos_view: true,
+      pedidos_edit: false,
+      alertas_view: true,
+      alertas_edit: false,
+      gerenciar_usuario: false,
+    });
+    setShowCancelDialog(false);
+    setHasUnsavedChanges(false);
+  };
+
+  const handleBackWithConfirmation = () => {
+    if (hasUnsavedChanges) {
+      setShowCancelDialog(true);
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   const handleCreateUser = async () => {
@@ -291,19 +358,7 @@ export default function Users() {
       title: "Usuário criado com sucesso!", 
       description: newUser.senha ? `Senha definida: ${senhaFinal}` : "Senha padrão: Temp100@" 
     });
-    setIsCreating(false);
-    setNewUser({ nome: "", email: "", senha: "" });
-    setPermissions({
-      cadastro_view: false,
-      cadastro_edit: false,
-      terminal_view: true,
-      terminal_edit: false,
-      pedidos_view: true,
-      pedidos_edit: false,
-      alertas_view: true,
-      alertas_edit: false,
-      gerenciar_usuario: false,
-    });
+    handleCancel();
     fetchUsers();
   };
 
@@ -312,7 +367,7 @@ export default function Users() {
       <Card className="max-w-7xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Gerenciar Usuário</h1>
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+          <Button variant="outline" onClick={handleBackWithConfirmation}>
             Voltar
           </Button>
         </div>
@@ -557,21 +612,7 @@ export default function Users() {
 
             <div className="flex gap-2">
               <Button onClick={handleCreateUser}>Criar Usuário</Button>
-              <Button variant="outline" onClick={() => {
-                setIsCreating(false);
-                setNewUser({ nome: "", email: "", senha: "" });
-                setPermissions({
-                  cadastro_view: false,
-                  cadastro_edit: false,
-                  terminal_view: true,
-                  terminal_edit: false,
-                  pedidos_view: true,
-                  pedidos_edit: false,
-                  alertas_view: true,
-                  alertas_edit: false,
-                  gerenciar_usuario: false,
-                });
-              }}>
+              <Button variant="outline" onClick={handleCancelWithConfirmation}>
                 Cancelar
               </Button>
             </div>
@@ -748,10 +789,7 @@ export default function Users() {
               <Button onClick={handleUpdatePermissions}>
                 Salvar Alterações
               </Button>
-              <Button variant="outline" onClick={() => {
-                setSelectedUser(null);
-                setEditPassword("");
-              }}>
+              <Button variant="outline" onClick={handleCancelWithConfirmation}>
                 Cancelar
               </Button>
             </div>
@@ -776,6 +814,26 @@ export default function Users() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterações não salvas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem alterações não salvas. Deseja realmente sair sem salvar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sair sem Salvar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
