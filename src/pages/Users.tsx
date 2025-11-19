@@ -101,6 +101,16 @@ export default function Users() {
   const handleUpdatePermissions = async () => {
     if (!selectedUser) return;
 
+    // Proteger o master admin
+    if (selectedUser.email === "ramonmatos390@gmail.com") {
+      toast({
+        title: "Ação não permitida",
+        description: "O usuário master admin não pode ser modificado",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const isCurrentlyAdmin = Array.isArray(selectedUser.user_roles) && 
       selectedUser.user_roles.some((ur: any) => ur.role === 'admin');
 
@@ -145,7 +155,17 @@ export default function Users() {
     fetchUsers();
   };
 
-  const toggleAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
+  const toggleAdmin = async (userId: string, isCurrentlyAdmin: boolean, userEmail: string) => {
+    // Proteger o master admin
+    if (userEmail === "ramonmatos390@gmail.com") {
+      toast({
+        title: "Ação não permitida",
+        description: "O usuário master admin não pode ser modificado",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isCurrentlyAdmin) {
       await supabase
         .from("user_roles")
@@ -279,6 +299,7 @@ export default function Users() {
                 {filteredUsers.map((user) => {
                   const isAdmin = Array.isArray(user.user_roles) && 
                     user.user_roles.some((ur: any) => ur.role === 'admin');
+                  const isMasterAdmin = user.email === "ramonmatos390@gmail.com";
                   
                   return (
                     <TableRow key={user.id}>
@@ -286,7 +307,7 @@ export default function Users() {
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <span className={isAdmin ? "font-bold text-primary" : ""}>
-                          {isAdmin ? "Admin" : "Comum"}
+                          {isAdmin ? (isMasterAdmin ? "Master Admin" : "Admin") : "Comum"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -295,16 +316,19 @@ export default function Users() {
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedUser(user)}
+                            disabled={isMasterAdmin}
                           >
                             Editar
                           </Button>
-                          <Button
-                            size="sm"
-                            variant={isAdmin ? "destructive" : "default"}
-                            onClick={() => toggleAdmin(user.id, isAdmin)}
-                          >
-                            {isAdmin ? "Remover Admin" : "Tornar Admin"}
-                          </Button>
+                          {!isMasterAdmin && (
+                            <Button
+                              size="sm"
+                              variant={isAdmin ? "destructive" : "default"}
+                              onClick={() => toggleAdmin(user.id, isAdmin, user.email)}
+                            >
+                              {isAdmin ? "Remover Admin" : "Tornar Admin"}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
