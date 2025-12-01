@@ -40,6 +40,8 @@ export default function Users() {
     senha: "",
   });
   const [editPassword, setEditPassword] = useState("");
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
   const [permissions, setPermissions] = useState({
     cadastro_view: false,
     cadastro_edit: false,
@@ -146,35 +148,20 @@ export default function Users() {
       return;
     }
 
-    const isCurrentlyAdmin = Array.isArray(selectedUser.user_roles) && 
+    const isCurrentlyAdmin = Array.isArray(selectedUser.user_roles) &&
       selectedUser.user_roles.some((ur: any) => ur.role === 'admin');
 
     try {
+      setSavingUser(true);
+      console.log("Salvando usuário", selectedUser.email, permissions);
+
       // Prepare update data
       const updateData: any = { permissoes: permissions };
-      
+
       // Se a senha foi alterada (não é **** e não está vazia)
       if (editPassword && editPassword !== "****") {
-        // Get current admin session to restore after
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
-        // Temporarily sign in as the user to update their password
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: selectedUser.email,
-          password: editPassword, // This won't work, we need service role
-        });
-        
-        // Since we can't change another user's password without service role,
-        // we'll create an edge function or set senha_temporaria flag
+        // Por segurança, marcamos apenas como senha temporária para forçar troca no próximo login
         updateData.senha_temporaria = true;
-        
-        // Restore admin session
-        if (currentSession) {
-          await supabase.auth.setSession({
-            access_token: currentSession.access_token,
-            refresh_token: currentSession.refresh_token,
-          });
-        }
       }
 
       const { error: updateError } = await supabase
@@ -191,7 +178,7 @@ export default function Users() {
         const { error: insertError } = await supabase
           .from("user_roles")
           .insert({ user_id: selectedUser.id, role: "admin" });
-        
+
         if (insertError) {
           throw insertError;
         }
@@ -201,15 +188,15 @@ export default function Users() {
           .delete()
           .eq("user_id", selectedUser.id)
           .eq("role", "admin");
-        
+
         if (deleteError) {
           throw deleteError;
         }
       }
 
-      toast({ 
-        title: "Sucesso!", 
-        description: "Permissões e configurações atualizadas com sucesso!" 
+      toast({
+        title: "Sucesso!",
+        description: "Permissões e configurações atualizadas com sucesso!",
       });
       handleCancel();
       fetchUsers();
@@ -220,6 +207,8 @@ export default function Users() {
         description: error.message || "Ocorreu um erro ao atualizar o usuário",
         variant: "destructive",
       });
+    } finally {
+      setSavingUser(false);
     }
   };
 
@@ -357,6 +346,9 @@ export default function Users() {
     const senhaFinal = newUser.senha || "Temp100@";
 
     try {
+      setCreatingUser(true);
+      console.log("Criando usuário", newUser.email, permissions);
+
       // Get current session to restore after
       const { data: { session: currentSession } } = await supabase.auth.getSession();
 
@@ -371,7 +363,7 @@ export default function Users() {
         },
       });
 
-      // Restore admin session immediately
+      // Restore admin session imediatamente, independente de sucesso
       if (currentSession) {
         await supabase.auth.setSession({
           access_token: currentSession.access_token,
@@ -383,35 +375,37 @@ export default function Users() {
         throw authError;
       }
 
+      if (!authData?.user) {
+        throw new Error("Usuário criado, mas não retornado pela autenticação.");
+      }
+
       // Update user profile with permissions
-      if (authData?.user) {
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({ 
-            permissoes: permissions,
-            senha_temporaria: !newUser.senha || newUser.senha === "Temp100@"
-          })
-          .eq("id", authData.user.id);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          permissoes: permissions,
+          senha_temporaria: !newUser.senha || newUser.senha === "Temp100@",
+        })
+        .eq("id", authData.user.id);
 
-        if (updateError) {
-          throw updateError;
-        }
+      if (updateError) {
+        throw updateError;
+      }
 
-        // If gerenciar_usuario is checked, make them admin
-        if (permissions.gerenciar_usuario) {
-          const { error: roleError } = await supabase
-            .from("user_roles")
-            .insert({ user_id: authData.user.id, role: "admin" });
-          
-          if (roleError) {
-            throw roleError;
-          }
+      // If gerenciar_usuario is checked, make them admin
+      if (permissions.gerenciar_usuario) {
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert({ user_id: authData.user.id, role: "admin" });
+
+        if (roleError) {
+          throw roleError;
         }
       }
 
-      toast({ 
-        title: "Sucesso!", 
-        description: `Usuário criado! ${newUser.senha ? `Senha: ${senhaFinal}` : "Senha padrão: Temp100@"}` 
+      toast({
+        title: "Sucesso!",
+        description: `Usuário criado! ${newUser.senha ? `Senha: ${senhaFinal}` : "Senha padrão: Temp100@"}`,
       });
       handleCancel();
       fetchUsers();
@@ -422,6 +416,8 @@ export default function Users() {
         description: error.message || "Ocorreu um erro ao criar o usuário",
         variant: "destructive",
       });
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -674,8 +670,10 @@ export default function Users() {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleCreateUser}>Criar Usuário</Button>
-              <Button variant="outline" onClick={handleCancelWithConfirmation}>
+              <Button onClick={handleCreateUser} disabled={creatingUser}>
+                {creatingUser ? "Criando..." : "Criar Usuário"}
+              </Button>
+              <Button variant="outline" onClick={handleCancelWithConfirmation} disabled={creatingUser}>
                 Cancelar
               </Button>
             </div>
