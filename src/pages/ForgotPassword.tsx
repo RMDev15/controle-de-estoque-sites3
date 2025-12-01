@@ -25,24 +25,7 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      // Verify if email exists
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("email")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (!profile) {
-        toast({
-          title: "Erro",
-          description: "E-mail não encontrado",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Send password reset email using Supabase's built-in method
+      // Usa diretamente o fluxo nativo de recuperação de senha
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/change-password`,
       });
@@ -51,10 +34,10 @@ export default function ForgotPassword() {
 
       toast({
         title: "E-mail enviado!",
-        description: "Verifique sua caixa de entrada para redefinir sua senha",
+        description:
+          "Se o e-mail estiver cadastrado, você receberá um link para redefinir sua senha.",
       });
 
-      // Redirect back to login after a short delay
       setTimeout(() => {
         navigate("/auth");
       }, 2000);
