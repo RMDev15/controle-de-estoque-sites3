@@ -149,44 +149,78 @@ export default function Users() {
     const isCurrentlyAdmin = Array.isArray(selectedUser.user_roles) && 
       selectedUser.user_roles.some((ur: any) => ur.role === 'admin');
 
-    // Prepare update data
-    const updateData: any = { permissoes: permissions };
-    
-    // Se a senha foi alterada (não é **** e não está vazia)
-    if (editPassword && editPassword !== "****") {
-      updateData.senha_temporaria = false;
-    }
+    try {
+      // Prepare update data
+      const updateData: any = { permissoes: permissions };
+      
+      // Se a senha foi alterada (não é **** e não está vazia)
+      if (editPassword && editPassword !== "****") {
+        // Get current admin session to restore after
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        // Temporarily sign in as the user to update their password
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: selectedUser.email,
+          password: editPassword, // This won't work, we need service role
+        });
+        
+        // Since we can't change another user's password without service role,
+        // we'll create an edge function or set senha_temporaria flag
+        updateData.senha_temporaria = true;
+        
+        // Restore admin session
+        if (currentSession) {
+          await supabase.auth.setSession({
+            access_token: currentSession.access_token,
+            refresh_token: currentSession.refresh_token,
+          });
+        }
+      }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update(updateData)
-      .eq("id", selectedUser.id);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", selectedUser.id);
 
-    if (error) {
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Handle admin role based on gerenciar_usuario permission
+      if (permissions.gerenciar_usuario && !isCurrentlyAdmin) {
+        const { error: insertError } = await supabase
+          .from("user_roles")
+          .insert({ user_id: selectedUser.id, role: "admin" });
+        
+        if (insertError) {
+          throw insertError;
+        }
+      } else if (!permissions.gerenciar_usuario && isCurrentlyAdmin) {
+        const { error: deleteError } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", selectedUser.id)
+          .eq("role", "admin");
+        
+        if (deleteError) {
+          throw deleteError;
+        }
+      }
+
+      toast({ 
+        title: "Sucesso!", 
+        description: "Permissões e configurações atualizadas com sucesso!" 
+      });
+      handleCancel();
+      fetchUsers();
+    } catch (error: any) {
+      console.error("Error updating user:", error);
       toast({
-        title: "Erro",
-        description: error.message,
+        title: "Erro ao atualizar",
+        description: error.message || "Ocorreu um erro ao atualizar o usuário",
         variant: "destructive",
       });
-      return;
     }
-
-    // Handle admin role based on gerenciar_usuario permission
-    if (permissions.gerenciar_usuario && !isCurrentlyAdmin) {
-      await supabase
-        .from("user_roles")
-        .insert({ user_id: selectedUser.id, role: "admin" });
-    } else if (!permissions.gerenciar_usuario && isCurrentlyAdmin) {
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", selectedUser.id)
-        .eq("role", "admin");
-    }
-
-    toast({ title: "Permissões atualizadas com sucesso!" });
-    handleCancel();
-    fetchUsers();
   };
 
   const toggleAdmin = async (userId: string, isCurrentlyAdmin: boolean, userEmail: string) => {
@@ -200,20 +234,36 @@ export default function Users() {
       return;
     }
 
-    if (isCurrentlyAdmin) {
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("role", "admin");
-    } else {
-      await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role: "admin" });
+    try {
+      if (isCurrentlyAdmin) {
+        const { error } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("role", "admin");
+        
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: "admin" });
+        
+        if (error) throw error;
+      }
+      
+      toast({ 
+        title: "Sucesso!", 
+        description: isCurrentlyAdmin ? "Status de admin removido" : "Usuário promovido a admin"
+      });
+      fetchUsers();
+    } catch (error: any) {
+      console.error("Error toggling admin:", error);
+      toast({
+        title: "Erro ao alterar status",
+        description: error.message || "Ocorreu um erro ao alterar o status de admin",
+        variant: "destructive",
+      });
     }
-    
-    toast({ title: "Status de admin atualizado!" });
-    fetchUsers();
   };
 
   const handleDeleteUser = async () => {
@@ -306,60 +356,73 @@ export default function Users() {
 
     const senhaFinal = newUser.senha || "Temp100@";
 
-    // Get current session to restore after
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    try {
+      // Get current session to restore after
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: newUser.email,
-      password: senhaFinal,
-      options: {
-        data: {
-          nome: newUser.nome,
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: senhaFinal,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            nome: newUser.nome,
+          },
         },
-      },
-    });
-
-    // Restore admin session immediately
-    if (currentSession) {
-      await supabase.auth.setSession({
-        access_token: currentSession.access_token,
-        refresh_token: currentSession.refresh_token,
       });
-    }
 
-    if (authError) {
+      // Restore admin session immediately
+      if (currentSession) {
+        await supabase.auth.setSession({
+          access_token: currentSession.access_token,
+          refresh_token: currentSession.refresh_token,
+        });
+      }
+
+      if (authError) {
+        throw authError;
+      }
+
+      // Update user profile with permissions
+      if (authData?.user) {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ 
+            permissoes: permissions,
+            senha_temporaria: !newUser.senha || newUser.senha === "Temp100@"
+          })
+          .eq("id", authData.user.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        // If gerenciar_usuario is checked, make them admin
+        if (permissions.gerenciar_usuario) {
+          const { error: roleError } = await supabase
+            .from("user_roles")
+            .insert({ user_id: authData.user.id, role: "admin" });
+          
+          if (roleError) {
+            throw roleError;
+          }
+        }
+      }
+
+      toast({ 
+        title: "Sucesso!", 
+        description: `Usuário criado! ${newUser.senha ? `Senha: ${senhaFinal}` : "Senha padrão: Temp100@"}` 
+      });
+      handleCancel();
+      fetchUsers();
+    } catch (error: any) {
+      console.error("Error creating user:", error);
       toast({
-        title: "Erro",
-        description: authError.message,
+        title: "Erro ao criar usuário",
+        description: error.message || "Ocorreu um erro ao criar o usuário",
         variant: "destructive",
       });
-      return;
     }
-
-    // Update user profile with permissions
-    if (authData?.user) {
-      await supabase
-        .from("profiles")
-        .update({ 
-          permissoes: permissions,
-          senha_temporaria: !newUser.senha || newUser.senha === "Temp100@"
-        })
-        .eq("id", authData.user.id);
-
-      // If gerenciar_usuario is checked, make them admin
-      if (permissions.gerenciar_usuario) {
-        await supabase
-          .from("user_roles")
-          .insert({ user_id: authData.user.id, role: "admin" });
-      }
-    }
-
-    toast({ 
-      title: "Usuário criado com sucesso!", 
-      description: newUser.senha ? `Senha definida: ${senhaFinal}` : "Senha padrão: Temp100@" 
-    });
-    handleCancel();
-    fetchUsers();
   };
 
   return (

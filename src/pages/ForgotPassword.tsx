@@ -8,17 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/logo.jpg";
 
 export default function ForgotPassword() {
-  const [step, setStep] = useState<"email" | "code" | "newPassword">("email");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const handleSendCode = async () => {
+  const handleSendResetEmail = async () => {
     if (!email) {
       toast({
         title: "Erro",
@@ -47,82 +42,22 @@ export default function ForgotPassword() {
         return;
       }
 
-      // Generate 6-digit code
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(verificationCode);
-
-      // TODO: Send email with code via edge function
-      // For now, we'll just show it in the toast
-      toast({
-        title: "Código enviado!",
-        description: `Seu código de verificação é: ${verificationCode}`,
-      });
-
-      setStep("code");
-    } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyCode = () => {
-    if (code !== generatedCode) {
-      toast({
-        title: "Erro",
-        description: "Código inválido",
-        variant: "destructive",
-      });
-      return;
-    }
-    setStep("newPassword");
-  };
-
-  const handleResetPassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Erro",
-        description: "As senhas não coincidem",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      toast({
-        title: "Erro",
-        description: "A senha deve ter no mínimo 6 caracteres",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
+      // Send password reset email using Supabase's built-in method
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/change-password`,
       });
 
       if (error) throw error;
 
-      // Update senha_temporaria flag
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from("profiles")
-          .update({ senha_temporaria: false })
-          .eq("email", email);
-      }
-
       toast({
-        title: "Sucesso!",
-        description: "Senha alterada com sucesso",
+        title: "E-mail enviado!",
+        description: "Verifique sua caixa de entrada para redefinir sua senha",
       });
-      navigate("/auth");
+
+      // Redirect back to login after a short delay
+      setTimeout(() => {
+        navigate("/auth");
+      }, 2000);
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -148,125 +83,41 @@ export default function ForgotPassword() {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={logo} alt="Só Bujigangas" className="w-32 h-auto mx-auto mb-4 lg:hidden" />
-            <h2 className="text-3xl font-bold text-foreground">
-              {step === "email" && "Altere sua Senha"}
-              {step === "code" && "Digite o código recebido"}
-              {step === "newPassword" && "Finalize sua Nova Senha"}
-            </h2>
-            <p className="text-muted-foreground mt-2">Gerenciador de Estoque</p>
+            <h2 className="text-3xl font-bold text-foreground">Recuperar Senha</h2>
+            <p className="text-muted-foreground mt-2">Digite seu e-mail cadastrado</p>
           </div>
 
-          {step === "email" && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Digite seu E-mail Cadastrado</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-4">
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
-                  onClick={handleSendCode}
-                  disabled={loading}
-                >
-                  {loading ? "Enviando..." : "Enviar"}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate("/auth")}
-                >
-                  Voltar
-                </Button>
-              </div>
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSendResetEmail()}
+                required
+              />
             </div>
-          )}
-
-          {step === "code" && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="code">Digite o Código Recebido no e-mail</Label>
-                <Input
-                  id="code"
-                  type="text"
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  maxLength={6}
-                  required
-                />
-              </div>
-              <div className="space-y-4">
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
-                  onClick={handleVerifyCode}
-                >
-                  Confirmar
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setStep("email")}
-                >
-                  Voltar
-                </Button>
-              </div>
+            <div className="space-y-4">
+              <Button
+                className="w-full bg-primary hover:bg-primary/90"
+                onClick={handleSendResetEmail}
+                disabled={loading}
+              >
+                {loading ? "Enviando..." : "Enviar Link de Recuperação"}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate("/auth")}
+                disabled={loading}
+              >
+                Voltar para Login
+              </Button>
             </div>
-          )}
-
-          {step === "newPassword" && (
-            <div className="space-y-6">
-              <p className="text-sm text-muted-foreground text-center">
-                Senha com no mínimo 8 Caracteres,<br />
-                Letras Maiúsculas, Letras Minúsculas,<br />
-                Número e Símbolo
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">Nova Senha</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirme Nova Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-4">
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
-                  onClick={handleResetPassword}
-                  disabled={loading}
-                >
-                  {loading ? "Alterando..." : "Confirmar"}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate("/auth")}
-                >
-                  Voltar
-                </Button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
