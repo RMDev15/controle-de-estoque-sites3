@@ -346,15 +346,31 @@ export default function Users() {
     const senhaFinal = newUser.senha || "Temp100@";
     
     // Salvar sessão atual ANTES de qualquer operação
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    let savedSession: { access_token: string; refresh_token: string } | null = null;
     
-    if (!currentSession) {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!currentSession) {
+        toast({
+          title: "Erro",
+          description: "Sessão expirada. Faça login novamente.",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+      
+      savedSession = {
+        access_token: currentSession.access_token,
+        refresh_token: currentSession.refresh_token,
+      };
+    } catch (e) {
       toast({
         title: "Erro",
-        description: "Sessão expirada. Faça login novamente.",
+        description: "Não foi possível verificar a sessão.",
         variant: "destructive",
       });
-      navigate("/auth");
       return;
     }
 
@@ -374,7 +390,17 @@ export default function Users() {
         },
       });
 
+      // Restaurar sessão do admin IMEDIATAMENTE após signUp (mesmo com erro)
+      if (savedSession) {
+        await supabase.auth.setSession(savedSession);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
       if (authError) {
+        // Mensagem amigável para erro de usuário já existente
+        if (authError.message === "User already registered") {
+          throw new Error("Este e-mail já está cadastrado no sistema.");
+        }
         throw authError;
       }
 
@@ -384,20 +410,6 @@ export default function Users() {
 
       const newUserId = authData.user.id;
       console.log("Usuário criado com ID:", newUserId);
-
-      // Restaurar sessão do admin IMEDIATAMENTE após signUp
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: currentSession.access_token,
-        refresh_token: currentSession.refresh_token,
-      });
-
-      if (sessionError) {
-        console.error("Erro ao restaurar sessão:", sessionError);
-        // Mesmo com erro, tentar continuar
-      }
-
-      // Pequeno delay para garantir que a sessão foi restaurada
-      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Update user profile with permissions
       const { error: updateError } = await supabase
@@ -410,7 +422,6 @@ export default function Users() {
 
       if (updateError) {
         console.error("Erro ao atualizar perfil:", updateError);
-        // Não lançar erro aqui pois o usuário já foi criado
       }
 
       // If gerenciar_usuario is checked, make them admin
@@ -429,20 +440,18 @@ export default function Users() {
         description: `Usuário criado! ${newUser.senha ? `Senha: ${senhaFinal}` : "Senha padrão: Temp100@"}`,
       });
       
-      setCreatingUser(false);
       handleCancel();
       fetchUsers();
     } catch (error: any) {
       console.error("Error creating user:", error);
       
-      // Sempre tentar restaurar a sessão em caso de erro
-      try {
-        await supabase.auth.setSession({
-          access_token: currentSession.access_token,
-          refresh_token: currentSession.refresh_token,
-        });
-      } catch (e) {
-        console.error("Erro ao restaurar sessão após falha:", e);
+      // Garantir restauração da sessão em caso de erro
+      if (savedSession) {
+        try {
+          await supabase.auth.setSession(savedSession);
+        } catch (e) {
+          console.error("Erro ao restaurar sessão após falha:", e);
+        }
       }
       
       toast({
@@ -450,6 +459,7 @@ export default function Users() {
         description: error.message || "Ocorreu um erro ao criar o usuário",
         variant: "destructive",
       });
+    } finally {
       setCreatingUser(false);
     }
   };

@@ -58,41 +58,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Set up auth state listener FIRST
+    // IMPORTANTE: Não usar async diretamente no callback para evitar deadlocks
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log("Auth state change:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Fetch profile immediately when user logs in
+        // Deferir chamadas Supabase para evitar deadlocks
         if (session?.user) {
-          try {
-            await fetchProfile(session.user.id);
-          } catch (error) {
-            console.error("Error fetching profile:", error);
-          }
+          const userId = session.user.id;
+          setTimeout(() => {
+            fetchProfile(userId).catch(error => {
+              console.error("Error fetching profile:", error);
+            }).finally(() => {
+              setLoading(false);
+            });
+          }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       console.log("Initial session check:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        try {
-          await fetchProfile(session.user.id);
-        } catch (error) {
+        fetchProfile(session.user.id).catch(error => {
           console.error("Error fetching profile:", error);
-        }
+        }).finally(() => {
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
