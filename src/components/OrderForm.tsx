@@ -51,6 +51,8 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [deliveryDays, setDeliveryDays] = useState<string>("");
+  const [fornecedor, setFornecedor] = useState<string>("");
+  const [contatoFornecedor, setContatoFornecedor] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -241,6 +243,8 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
           prazo_entrega_dias: parseInt(deliveryDays),
           data_prevista_entrega: deliveryDate.toISOString(),
           data_criacao: new Date().toISOString(),
+          fornecedor: fornecedor || null,
+          contato_fornecedor: contatoFornecedor || null,
         })
         .select()
         .single();
@@ -372,20 +376,37 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
       <Dialog open={showDeliveryDialog} onOpenChange={setShowDeliveryDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Prazo de Entrega</DialogTitle>
+            <DialogTitle>Informações do Pedido</DialogTitle>
             <DialogDescription>
-              Qual o prazo esperado de entrega pelo fornecedor?
+              Preencha as informações do fornecedor e prazo de entrega
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Prazo em dias</Label>
+              <Label>Fornecedor</Label>
+              <Input
+                placeholder="Nome do fornecedor"
+                value={fornecedor}
+                onChange={(e) => setFornecedor(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Contato do Fornecedor</Label>
+              <Input
+                placeholder="Telefone ou e-mail"
+                value={contatoFornecedor}
+                onChange={(e) => setContatoFornecedor(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Prazo de entrega (dias) *</Label>
               <Input
                 type="number"
                 min="1"
                 placeholder="Ex: 10"
                 value={deliveryDays}
                 onChange={(e) => setDeliveryDays(e.target.value)}
+                required
               />
             </div>
           </div>

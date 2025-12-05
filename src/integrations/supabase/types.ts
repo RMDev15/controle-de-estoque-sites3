@@ -57,10 +57,12 @@ export type Database = {
         Row: {
           alerta_cor: Database["public"]["Enums"]["alert_color"] | null
           codigo: string
+          contato_fornecedor: string | null
           created_at: string | null
           created_by: string | null
           data_criacao: string | null
           data_prevista_entrega: string | null
+          fornecedor: string | null
           id: string
           prazo_entrega_dias: number | null
           status: Database["public"]["Enums"]["order_status"]
@@ -69,10 +71,12 @@ export type Database = {
         Insert: {
           alerta_cor?: Database["public"]["Enums"]["alert_color"] | null
           codigo: string
+          contato_fornecedor?: string | null
           created_at?: string | null
           created_by?: string | null
           data_criacao?: string | null
           data_prevista_entrega?: string | null
+          fornecedor?: string | null
           id?: string
           prazo_entrega_dias?: number | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -81,10 +85,12 @@ export type Database = {
         Update: {
           alerta_cor?: Database["public"]["Enums"]["alert_color"] | null
           codigo?: string
+          contato_fornecedor?: string | null
           created_at?: string | null
           created_by?: string | null
           data_criacao?: string | null
           data_prevista_entrega?: string | null
+          fornecedor?: string | null
           id?: string
           prazo_entrega_dias?: number | null
           status?: Database["public"]["Enums"]["order_status"]
