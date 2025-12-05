@@ -41,6 +41,9 @@ interface Order {
   prazo_entrega_dias: number | null;
   data_prevista_entrega: string | null;
   created_at: string;
+  fornecedor: string | null;
+  contato_fornecedor: string | null;
+  dias_restantes?: number;
   order_items: Array<{
     id: string;
     quantidade: number;
@@ -90,10 +93,15 @@ export default function Orders() {
       return;
     }
 
-    const ordersWithAlerts = (data || []).map((order) => ({
-      ...order,
-      alerta_cor: calculateAlertColor(order),
-    }));
+    const ordersWithAlerts = (data || []).map((order) => {
+      const alertColor = calculateAlertColor(order);
+      const diasRestantes = calculateDaysRemaining(order);
+      return {
+        ...order,
+        alerta_cor: alertColor,
+        dias_restantes: diasRestantes,
+      };
+    });
 
     setOrders(ordersWithAlerts);
   };
@@ -102,7 +110,7 @@ export default function Orders() {
     if (
       order.status === "cancelado" ||
       order.status === "devolvido" ||
-      order.status === "entregue"
+      order.status === "recebido"
     ) {
       return "sem_cor";
     }
@@ -135,6 +143,20 @@ export default function Orders() {
     }
 
     return "sem_cor";
+  };
+
+  const calculateDaysRemaining = (order: Order): number => {
+    if (!order.data_prevista_entrega) return 0;
+    
+    const deliveryDate = new Date(order.data_prevista_entrega);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deliveryDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = deliveryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
   };
 
   const applyFilters = () => {
@@ -322,7 +344,10 @@ export default function Orders() {
             <TableRow>
               <TableHead>Pedido</TableHead>
               <TableHead>Data</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Fornecedor</TableHead>
+              <TableHead>Contato</TableHead>
+              <TableHead>Prazo</TableHead>
+              <TableHead>Dias Restantes</TableHead>
               <TableHead>Alerta</TableHead>
               <TableHead>Ações</TableHead>
             </TableRow>
@@ -332,17 +357,30 @@ export default function Orders() {
               <TableRow key={order.id}>
                 <TableCell>{order.codigo}</TableCell>
                 <TableCell>{formatDate(order.data_criacao)}</TableCell>
+                <TableCell>{order.fornecedor || "-"}</TableCell>
+                <TableCell>{order.contato_fornecedor || "-"}</TableCell>
                 <TableCell>
-                  <span className="px-2 py-1 rounded text-sm">
-                    {order.status}
-                  </span>
+                  {order.prazo_entrega_dias ? `${order.prazo_entrega_dias} dias` : "-"}
+                </TableCell>
+                <TableCell>
+                  {order.alerta_cor !== "sem_cor" && order.dias_restantes !== undefined ? (
+                    <span
+                      className={`${getStatusColor(order.alerta_cor)} px-2 py-1 rounded text-sm font-medium`}
+                    >
+                      {order.dias_restantes > 0 
+                        ? `${order.dias_restantes} dias` 
+                        : order.dias_restantes === 0 
+                          ? "Hoje" 
+                          : `${Math.abs(order.dias_restantes)} dias atrasado`}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </TableCell>
                 <TableCell>
                   {order.alerta_cor !== "sem_cor" && (
                     <span
-                      className={`${getStatusColor(
-                        order.alerta_cor
-                      )} px-2 py-1 rounded text-sm`}
+                      className={`${getStatusColor(order.alerta_cor)} px-2 py-1 rounded text-sm`}
                     >
                       {getStatusLabel(order.alerta_cor)}
                     </span>
@@ -405,7 +443,25 @@ export default function Orders() {
               </DialogTitle>
             </DialogHeader>
             {selectedOrder && (
-              <div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Fornecedor</p>
+                    <p className="font-medium">{selectedOrder.fornecedor || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contato</p>
+                    <p className="font-medium">{selectedOrder.contato_fornecedor || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Prazo de Entrega</p>
+                    <p className="font-medium">{selectedOrder.prazo_entrega_dias ? `${selectedOrder.prazo_entrega_dias} dias` : "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Previsão de Entrega</p>
+                    <p className="font-medium">{selectedOrder.data_prevista_entrega ? formatDate(selectedOrder.data_prevista_entrega) : "-"}</p>
+                  </div>
+                </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
