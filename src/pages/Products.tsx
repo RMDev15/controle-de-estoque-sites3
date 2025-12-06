@@ -13,11 +13,68 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Label } from "@/components/ui/label";
+
+interface Product {
+  id: string;
+  codigo: string;
+  nome: string;
+  cor: string;
+  codigo_barras: string | null;
+  estoque_atual: number;
+  valor_unitario: number;
+  valor_venda: number;
+  markup: number | null;
+  fornecedor: string | null;
+  foto_url: string | null;
+}
+
+interface StockAlert {
+  product_id: string;
+  nivel_verde_min: number;
+  nivel_verde_max: number;
+  nivel_amarelo_min: number;
+  nivel_amarelo_max: number;
+  nivel_vermelho_max: number;
+}
 
 export default function Products() {
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<Map<string, StockAlert>>(new Map());
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [showAlertConfig, setShowAlertConfig] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    nivel_verde_min: 501,
+    nivel_verde_max: 1000,
+    nivel_amarelo_min: 201,
+    nivel_amarelo_max: 500,
+    nivel_vermelho_max: 200,
+  });
   const [formData, setFormData] = useState({
     codigo: "",
     nome: "",
@@ -38,6 +95,7 @@ export default function Products() {
 
   useEffect(() => {
     fetchProducts();
+    fetchStockAlerts();
   }, []);
 
   useEffect(() => {
@@ -54,6 +112,65 @@ export default function Products() {
     setProducts(data || []);
   };
 
+  const fetchStockAlerts = async () => {
+    const { data } = await supabase
+      .from("stock_alerts")
+      .select("*");
+    
+    const alertMap = new Map<string, StockAlert>();
+    (data || []).forEach((alert: any) => {
+      alertMap.set(alert.product_id, alert);
+    });
+    setStockAlerts(alertMap);
+  };
+
+  const getAlertColor = (product: Product): string => {
+    const alert = stockAlerts.get(product.id);
+    const stock = product.estoque_atual;
+
+    if (alert) {
+      if (stock >= alert.nivel_verde_min && stock <= alert.nivel_verde_max) {
+        return "verde";
+      } else if (stock >= alert.nivel_amarelo_min && stock <= alert.nivel_amarelo_max) {
+        return "amarelo";
+      } else if (stock <= alert.nivel_vermelho_max) {
+        return "vermelho";
+      }
+    } else {
+      // Default ranges
+      if (stock >= 501 && stock <= 1000) return "verde";
+      if (stock >= 201 && stock <= 500) return "amarelo";
+      if (stock <= 200) return "vermelho";
+    }
+    return "verde";
+  };
+
+  const getRowBgColor = (alertColor: string) => {
+    switch (alertColor) {
+      case "verde":
+        return "bg-status-green-light";
+      case "amarelo":
+        return "bg-status-yellow-light";
+      case "vermelho":
+        return "bg-status-red-light";
+      default:
+        return "";
+    }
+  };
+
+  const getAlertBadge = (alertColor: string) => {
+    switch (alertColor) {
+      case "verde":
+        return <span className="px-2 py-1 rounded text-xs bg-status-green text-white">Normal</span>;
+      case "amarelo":
+        return <span className="px-2 py-1 rounded text-xs bg-status-yellow text-black">Médio</span>;
+      case "vermelho":
+        return <span className="px-2 py-1 rounded text-xs bg-status-red text-white">Baixo</span>;
+      default:
+        return null;
+    }
+  };
+
   const filteredProducts = products.filter((p) =>
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,6 +179,11 @@ export default function Products() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setShowConfirmDialog(true);
+  };
+
+  const confirmSubmit = async () => {
+    setShowConfirmDialog(false);
     
     // If no codigo, generate one
     let codigoToUse = formData.codigo;
@@ -109,14 +231,19 @@ export default function Products() {
           variant: "destructive",
         });
       } else {
+        // Save stock alert config
+        await saveStockAlert(selectedProduct.id);
         toast({ title: "Produto atualizado com sucesso!" });
         resetForm();
         fetchProducts();
+        fetchStockAlerts();
       }
     } else {
-      const { error } = await supabase
+      const { data: newProduct, error } = await supabase
         .from("products")
-        .insert(dataToSave);
+        .insert(dataToSave)
+        .select()
+        .single();
       
       if (error) {
         toast({
@@ -125,10 +252,41 @@ export default function Products() {
           variant: "destructive",
         });
       } else {
+        // Save stock alert config for new product
+        await saveStockAlert(newProduct.id);
         toast({ title: "Produto cadastrado com sucesso!" });
         resetForm();
         fetchProducts();
+        fetchStockAlerts();
       }
+    }
+  };
+
+  const saveStockAlert = async (productId: string) => {
+    const alertData = {
+      product_id: productId,
+      nivel_verde_min: alertConfig.nivel_verde_min,
+      nivel_verde_max: alertConfig.nivel_verde_max,
+      nivel_amarelo_min: alertConfig.nivel_amarelo_min,
+      nivel_amarelo_max: alertConfig.nivel_amarelo_max,
+      nivel_vermelho_max: alertConfig.nivel_vermelho_max,
+    };
+
+    const { data: existing } = await supabase
+      .from("stock_alerts")
+      .select("id")
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from("stock_alerts")
+        .update(alertData)
+        .eq("product_id", productId);
+    } else {
+      await supabase
+        .from("stock_alerts")
+        .insert(alertData);
     }
   };
 
@@ -174,7 +332,6 @@ export default function Products() {
       .select("codigo");
     
     if (data && data.length > 0) {
-      // Convert all codes to numbers and find the maximum
       const codes = data.map(p => parseInt(p.codigo) || 0);
       const maxCode = Math.max(...codes);
       return String(maxCode + 1).padStart(3, "0");
@@ -198,6 +355,26 @@ export default function Products() {
     setSelectedProduct(null);
     setImageFile(null);
     setImagePreview("");
+    setAlertConfig({
+      nivel_verde_min: 501,
+      nivel_verde_max: 1000,
+      nivel_amarelo_min: 201,
+      nivel_amarelo_max: 500,
+      nivel_vermelho_max: 200,
+    });
+  };
+
+  const loadProductAlertConfig = (productId: string) => {
+    const alert = stockAlerts.get(productId);
+    if (alert) {
+      setAlertConfig({
+        nivel_verde_min: alert.nivel_verde_min,
+        nivel_verde_max: alert.nivel_verde_max,
+        nivel_amarelo_min: alert.nivel_amarelo_min,
+        nivel_amarelo_max: alert.nivel_amarelo_max,
+        nivel_vermelho_max: alert.nivel_vermelho_max,
+      });
+    }
   };
 
   return (
@@ -238,40 +415,77 @@ export default function Products() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Cor</TableHead>
                   <TableHead>Estoque</TableHead>
+                  <TableHead>Alerta</TableHead>
                   <TableHead>Valor UN</TableHead>
                   <TableHead>Fornecedor</TableHead>
                   <TableHead>Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>{product.codigo}</TableCell>
-                    <TableCell>{product.nome}</TableCell>
-                    <TableCell>{product.cor}</TableCell>
-                    <TableCell>{product.estoque_atual}</TableCell>
-                    <TableCell>R$ {product.valor_unitario}</TableCell>
-                    <TableCell>{product.fornecedor}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setFormData({
-                            ...product,
-                            estoque_atual: product.estoque_atual?.toString() || "",
-                            valor_unitario: product.valor_unitario?.toString() || "",
-                            valor_venda: product.valor_venda?.toString() || "",
-                            markup: product.markup?.toString() || "",
-                          });
-                        }}
-                      >
-                        Editar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredProducts.map((product) => {
+                  const alertColor = getAlertColor(product);
+                  return (
+                    <HoverCard key={product.id}>
+                      <HoverCardTrigger asChild>
+                        <TableRow className={`${getRowBgColor(alertColor)} cursor-pointer transition-colors`}>
+                          <TableCell>{product.codigo}</TableCell>
+                          <TableCell>{product.nome}</TableCell>
+                          <TableCell>{product.cor}</TableCell>
+                          <TableCell>{product.estoque_atual}</TableCell>
+                          <TableCell>{getAlertBadge(alertColor)}</TableCell>
+                          <TableCell>R$ {product.valor_unitario?.toFixed(2)}</TableCell>
+                          <TableCell>{product.fornecedor}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedProduct(product);
+                                setFormData({
+                                  ...product,
+                                  estoque_atual: product.estoque_atual?.toString() || "",
+                                  valor_unitario: product.valor_unitario?.toString() || "",
+                                  valor_venda: product.valor_venda?.toString() || "",
+                                  markup: product.markup?.toString() || "",
+                                  codigo_barras: product.codigo_barras || "",
+                                  fornecedor: product.fornecedor || "",
+                                  foto_url: product.foto_url || "",
+                                  cor: product.cor || "",
+                                });
+                                loadProductAlertConfig(product.id);
+                              }}
+                            >
+                              Editar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-80" side="right">
+                        <div className="flex gap-4">
+                          {product.foto_url && (
+                            <img
+                              src={product.foto_url}
+                              alt={product.nome}
+                              className="w-20 h-20 object-cover rounded-md"
+                            />
+                          )}
+                          <div className="space-y-1">
+                            <h4 className="font-semibold">{product.nome}</h4>
+                            <p className="text-sm text-muted-foreground">Código: {product.codigo}</p>
+                            <p className="text-sm text-muted-foreground">Cor: {product.cor || "-"}</p>
+                            <p className="text-sm text-muted-foreground">Estoque: {product.estoque_atual}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Valor: R$ {product.valor_unitario?.toFixed(2)} → R$ {product.valor_venda?.toFixed(2)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Markup: {product.markup ? `${product.markup}%` : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  );
+                })}
               </TableBody>
             </Table>
           </>
@@ -390,7 +604,7 @@ export default function Products() {
                       required
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-sm font-medium mb-1">Markup: %</label>
                     <Input
                       type="number"
@@ -405,6 +619,16 @@ export default function Products() {
                         });
                       }}
                     />
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAlertConfig(true)}
+                      className="mt-6"
+                    >
+                      Configurar Alerta
+                    </Button>
                   </div>
                 </div>
 
@@ -421,6 +645,113 @@ export default function Products() {
           </form>
         )}
       </Card>
+
+      {/* Dialog para configurar alerta */}
+      <Dialog open={showAlertConfig} onOpenChange={setShowAlertConfig}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configurar Faixas de Alerta</DialogTitle>
+            <DialogDescription>
+              Defina os limites de estoque para cada nível de alerta
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-status-green-light rounded-lg">
+              <Label className="text-status-green font-medium">VERDE - Estoque Normal</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <Label className="text-xs">Mínimo</Label>
+                  <Input
+                    type="number"
+                    value={alertConfig.nivel_verde_min}
+                    onChange={(e) => setAlertConfig({
+                      ...alertConfig,
+                      nivel_verde_min: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Máximo</Label>
+                  <Input
+                    type="number"
+                    value={alertConfig.nivel_verde_max}
+                    onChange={(e) => setAlertConfig({
+                      ...alertConfig,
+                      nivel_verde_max: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-status-yellow-light rounded-lg">
+              <Label className="text-status-yellow font-medium">AMARELO - Estoque Médio</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <Label className="text-xs">Mínimo</Label>
+                  <Input
+                    type="number"
+                    value={alertConfig.nivel_amarelo_min}
+                    onChange={(e) => setAlertConfig({
+                      ...alertConfig,
+                      nivel_amarelo_min: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Máximo</Label>
+                  <Input
+                    type="number"
+                    value={alertConfig.nivel_amarelo_max}
+                    onChange={(e) => setAlertConfig({
+                      ...alertConfig,
+                      nivel_amarelo_max: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-status-red-light rounded-lg">
+              <Label className="text-status-red font-medium">VERMELHO - Estoque Baixo</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <Label className="text-xs">De 0 até</Label>
+                  <Input
+                    type="number"
+                    value={alertConfig.nivel_vermelho_max}
+                    onChange={(e) => setAlertConfig({
+                      ...alertConfig,
+                      nivel_vermelho_max: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAlertConfig(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alert Dialog para confirmar */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar {selectedProduct?.id ? "atualização" : "cadastro"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja {selectedProduct?.id ? "atualizar" : "cadastrar"} este produto?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSubmit}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

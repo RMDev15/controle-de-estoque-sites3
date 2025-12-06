@@ -59,8 +59,15 @@ export default {
         },
         status: {
           green: "hsl(var(--status-green))",
+          "green-light": "hsl(var(--status-green-light))",
           yellow: "hsl(var(--status-yellow))",
+          "yellow-light": "hsl(var(--status-yellow-light))",
           red: "hsl(var(--status-red))",
+          "red-light": "hsl(var(--status-red-light))",
+          blue: "hsl(var(--status-blue))",
+          "blue-light": "hsl(var(--status-blue-light))",
+          gray: "hsl(var(--status-gray))",
+          "gray-light": "hsl(var(--status-gray-light))",
         },
       },
       borderRadius: {

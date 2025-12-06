@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Plus, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Search, Plus, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: string;
@@ -28,6 +52,7 @@ interface Product {
   nome: string;
   cor: string;
   estoque_atual: number;
+  fornecedor: string | null;
 }
 
 interface OrderItem {
@@ -36,6 +61,11 @@ interface OrderItem {
   nome: string;
   cor: string;
   quantidade: number;
+}
+
+interface Supplier {
+  name: string;
+  products: Product[];
 }
 
 interface OrderFormProps {
@@ -50,31 +80,72 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
   const [searchTerm, setSearchTerm] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deliveryDays, setDeliveryDays] = useState<string>("");
   const [fornecedor, setFornecedor] = useState<string>("");
   const [contatoFornecedor, setContatoFornecedor] = useState<string>("");
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchProducts();
     if (order) {
       loadOrderItems();
+      setFornecedor(order.fornecedor || "");
+      setContatoFornecedor(order.contato_fornecedor || "");
     }
   }, [order]);
 
   useEffect(() => {
+    // Organize products by supplier
+    const supplierMap = new Map<string, Product[]>();
+    products.forEach((product) => {
+      const supplierName = product.fornecedor || "Sem Fornecedor";
+      if (!supplierMap.has(supplierName)) {
+        supplierMap.set(supplierName, []);
+      }
+      supplierMap.get(supplierName)!.push(product);
+    });
+
+    const supplierList: Supplier[] = [];
+    supplierMap.forEach((prods, name) => {
+      if (name !== "Sem Fornecedor") {
+        supplierList.push({ name, products: prods });
+      }
+    });
+    setSuppliers(supplierList);
+  }, [products]);
+
+  useEffect(() => {
     if (searchTerm) {
-      const filtered = products.filter(
+      let filtered = products;
+      
+      // If supplier selected, filter by supplier first
+      if (selectedSupplier) {
+        filtered = filtered.filter((p) => p.fornecedor === selectedSupplier);
+      }
+      
+      filtered = filtered.filter(
         (p) =>
           p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.cor?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredProducts(filtered);
+      setHighlightedIndex(filtered.length > 0 ? 0 : -1);
+    } else if (selectedSupplier) {
+      const filtered = products.filter((p) => p.fornecedor === selectedSupplier);
+      setFilteredProducts(filtered);
+      setHighlightedIndex(-1);
     } else {
       setFilteredProducts([]);
+      setHighlightedIndex(-1);
     }
-  }, [searchTerm, products]);
+  }, [searchTerm, products, selectedSupplier]);
 
   const fetchProducts = async () => {
     const { data, error } = await supabase
@@ -108,7 +179,7 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
     setOrderItems(items);
   };
 
-  const addProduct = (product: Product) => {
+  const addProduct = useCallback((product: Product) => {
     const existingItem = orderItems.find(
       (item) => item.product_id === product.id
     );
@@ -136,7 +207,29 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
 
     setSearchTerm("");
     setFilteredProducts([]);
-  };
+    setHighlightedIndex(-1);
+    
+    toast({ title: `${product.nome} adicionado ao pedido` });
+  }, [orderItems, toast]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (filteredProducts.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < filteredProducts.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
+        addProduct(filteredProducts[highlightedIndex]);
+      }
+    }
+  }, [filteredProducts, highlightedIndex, addProduct]);
 
   const updateQuantity = (product_id: string, quantidade: number) => {
     if (quantidade <= 0) {
@@ -166,12 +259,15 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
     }
 
     if (order) {
-      // Atualizar pedido existente
-      await updateOrder();
+      setShowConfirmDialog(true);
     } else {
-      // Mostrar diálogo para prazo de entrega
       setShowDeliveryDialog(true);
     }
+  };
+
+  const handleConfirmUpdate = async () => {
+    setShowConfirmDialog(false);
+    await updateOrder();
   };
 
   const updateOrder = async () => {
@@ -191,6 +287,15 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
         .insert(items);
 
       if (itemsError) throw itemsError;
+
+      // Atualizar fornecedor e contato
+      await supabase
+        .from("orders")
+        .update({
+          fornecedor: fornecedor || null,
+          contato_fornecedor: contatoFornecedor || null,
+        })
+        .eq("id", order.id);
 
       toast({ title: "Pedido atualizado com sucesso" });
       onSuccess();
@@ -276,38 +381,136 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
     }
   };
 
+  const handleSupplierSelect = (supplierName: string) => {
+    setSelectedSupplier(supplierName);
+    setFornecedor(supplierName);
+    setSupplierOpen(false);
+    
+    // Find supplier contact from products
+    const supplierProduct = products.find((p) => p.fornecedor === supplierName);
+    if (supplierProduct) {
+      // Auto-fill products from this supplier
+      const filtered = products.filter((p) => p.fornecedor === supplierName);
+      setFilteredProducts(filtered);
+    }
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onKeyDown={handleFormKeyDown}>
+      {/* Supplier Selection */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Fornecedor</Label>
+          <Popover open={supplierOpen} onOpenChange={setSupplierOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={supplierOpen}
+                className="w-full justify-between"
+              >
+                {selectedSupplier || fornecedor || "Selecionar fornecedor..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0">
+              <Command>
+                <CommandInput placeholder="Buscar fornecedor..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {suppliers.map((supplier) => (
+                      <CommandItem
+                        key={supplier.name}
+                        value={supplier.name}
+                        onSelect={() => handleSupplierSelect(supplier.name)}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedSupplier === supplier.name
+                              ? "opacity-100"
+                              : "opacity-0"
+                          )}
+                        />
+                        {supplier.name} ({supplier.products.length} produtos)
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="space-y-2">
+          <Label>Ou digite novo fornecedor</Label>
+          <Input
+            placeholder="Nome do fornecedor"
+            value={fornecedor}
+            onChange={(e) => {
+              setFornecedor(e.target.value);
+              setSelectedSupplier("");
+            }}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Contato do Fornecedor</Label>
+          <Input
+            placeholder="Telefone ou e-mail"
+            value={contatoFornecedor}
+            onChange={(e) => setContatoFornecedor(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Product Search */}
       <div className="space-y-2">
-        <Label>Buscar Produto</Label>
+        <Label>Buscar Produto (Enter para adicionar)</Label>
         <div className="relative">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             placeholder="Digite código, nome ou cor do produto..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             className="pl-10"
           />
           {filteredProducts.length > 0 && (
             <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product, index) => (
                 <button
                   key={product.id}
                   onClick={() => addProduct(product)}
-                  className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+                  className={cn(
+                    "w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground",
+                    index === highlightedIndex && "bg-accent text-accent-foreground"
+                  )}
                 >
                   <div className="font-medium">{product.nome}</div>
                   <div className="text-sm text-muted-foreground">
                     Código: {product.codigo} | Cor: {product.cor || "N/A"} |
                     Estoque: {product.estoque_atual}
+                    {product.fornecedor && ` | Fornecedor: ${product.fornecedor}`}
                   </div>
                 </button>
               ))}
             </div>
           )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Use ↑↓ para navegar e Enter para adicionar. Ctrl+Enter para finalizar pedido.
+        </p>
       </div>
 
+      {/* Order Items Table */}
       <div>
         <Label>Itens do Pedido</Label>
         <Table>
@@ -363,12 +566,13 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
         </Table>
       </div>
 
+      {/* Action Buttons */}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
         <Button onClick={handleSubmit}>
-          {order ? "Atualizar" : "Finalizar"}
+          {order ? "Atualizar" : "Finalizar"} (Ctrl+Enter)
         </Button>
       </div>
 
@@ -376,27 +580,16 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
       <Dialog open={showDeliveryDialog} onOpenChange={setShowDeliveryDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Informações do Pedido</DialogTitle>
+            <DialogTitle>Confirmar Pedido</DialogTitle>
             <DialogDescription>
-              Preencha as informações do fornecedor e prazo de entrega
+              Confirme as informações do pedido e o prazo de entrega
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Fornecedor</Label>
-              <Input
-                placeholder="Nome do fornecedor"
-                value={fornecedor}
-                onChange={(e) => setFornecedor(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Contato do Fornecedor</Label>
-              <Input
-                placeholder="Telefone ou e-mail"
-                value={contatoFornecedor}
-                onChange={(e) => setContatoFornecedor(e.target.value)}
-              />
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm"><strong>Fornecedor:</strong> {fornecedor || "Não informado"}</p>
+              <p className="text-sm"><strong>Contato:</strong> {contatoFornecedor || "Não informado"}</p>
+              <p className="text-sm"><strong>Itens:</strong> {orderItems.length} produto(s)</p>
             </div>
             <div>
               <Label>Prazo de entrega (dias) *</Label>
@@ -407,6 +600,12 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
                 value={deliveryDays}
                 onChange={(e) => setDeliveryDays(e.target.value)}
                 required
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    createOrder();
+                  }
+                }}
               />
             </div>
           </div>
@@ -415,12 +614,30 @@ export default function OrderForm({ order, onSuccess, onCancel }: OrderFormProps
               variant="outline"
               onClick={() => setShowDeliveryDialog(false)}
             >
-              Cancelar
+              Voltar
             </Button>
-            <Button onClick={createOrder}>Confirmar</Button>
+            <Button onClick={createOrder}>Confirmar Pedido</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Alert Dialog para confirmar atualização */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar atualização</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja atualizar este pedido?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmUpdate}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

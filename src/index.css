@@ -47,8 +47,15 @@ All colors MUST be HSL.
 
     /* Custom colors for inventory system */
     --status-green: 120 100% 35%; /* Stock OK */
+    --status-green-light: 120 100% 90%; /* Stock OK - Background */
     --status-yellow: 48 100% 50%; /* Stock Warning */
+    --status-yellow-light: 48 100% 90%; /* Stock Warning - Background */
     --status-red: 0 84% 60%; /* Stock Critical */
+    --status-red-light: 0 84% 92%; /* Stock Critical - Background */
+    --status-blue: 210 100% 50%; /* Aguardando */
+    --status-blue-light: 210 100% 90%; /* Aguardando - Background */
+    --status-gray: 220 10% 50%; /* Standby */
+    --status-gray-light: 220 10% 90%; /* Standby - Background */
     
     /* Auth page gradient */
     --auth-gradient-start: 225 83% 73%; /* #6B92FF */
@@ -94,8 +101,15 @@ All colors MUST be HSL.
     --ring: 212.7 26.8% 83.9%;
     
     --status-green: 120 100% 35%;
+    --status-green-light: 120 50% 30%;
     --status-yellow: 48 100% 50%;
+    --status-yellow-light: 48 50% 30%;
     --status-red: 0 84% 60%;
+    --status-red-light: 0 50% 25%;
+    --status-blue: 210 100% 50%;
+    --status-blue-light: 210 50% 30%;
+    --status-gray: 220 10% 50%;
+    --status-gray-light: 220 10% 25%;
     
     --auth-gradient-start: 225 83% 73%;
     --auth-gradient-end: 229 93% 65%;
