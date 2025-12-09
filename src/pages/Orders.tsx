@@ -80,6 +80,7 @@ export default function Orders() {
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [statusChangeOrder, setStatusChangeOrder] = useState<{ order: Order; newStatus: OrderStatus } | null>(null);
+  const [receiveOrderConfirm, setReceiveOrderConfirm] = useState<Order | null>(null);
   const [filters, setFilters] = useState({
     pedido: "",
     data: "",
@@ -309,6 +310,13 @@ export default function Orders() {
 
     const { order, newStatus } = statusChangeOrder;
 
+    // Se for recebido, abre confirmação especial
+    if (newStatus === "recebido") {
+      setReceiveOrderConfirm(order);
+      setStatusChangeOrder(null);
+      return;
+    }
+
     const { error } = await supabase
       .from("orders")
       .update({ status: newStatus })
@@ -326,6 +334,69 @@ export default function Orders() {
     toast({ title: `Status alterado para ${getStatusLabel(newStatus)}` });
     setStatusChangeOrder(null);
     fetchOrders();
+  };
+
+  const handleReceiveOrder = async () => {
+    if (!receiveOrderConfirm) return;
+
+    const order = receiveOrderConfirm;
+
+    try {
+      // 1. Atualizar status do pedido
+      const { error: orderError } = await supabase
+        .from("orders")
+        .update({ status: "recebido" })
+        .eq("id", order.id);
+
+      if (orderError) throw orderError;
+
+      // 2. Criar movimentação de entrada para cada item
+      const stockMovements = order.order_items.map((item) => ({
+        product_id: item.products.id,
+        quantidade: item.quantidade,
+        tipo: "entrada",
+      }));
+
+      const { error: movementError } = await supabase
+        .from("stock_movements")
+        .insert(stockMovements);
+
+      if (movementError) throw movementError;
+
+      // 3. Atualizar estoque de cada produto
+      for (const item of order.order_items) {
+        const { data: product, error: fetchError } = await supabase
+          .from("products")
+          .select("estoque_atual")
+          .eq("id", item.products.id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        const newStock = (product?.estoque_atual || 0) + item.quantidade;
+
+        const { error: updateError } = await supabase
+          .from("products")
+          .update({ estoque_atual: newStock })
+          .eq("id", item.products.id);
+
+        if (updateError) throw updateError;
+      }
+
+      toast({
+        title: "Pedido recebido com sucesso!",
+        description: `${order.order_items.length} produto(s) adicionado(s) ao estoque.`,
+      });
+
+      setReceiveOrderConfirm(null);
+      fetchOrders();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao processar recebimento",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusLabel = (status: string): string => {
@@ -723,6 +794,52 @@ export default function Orders() {
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={handleStatusChange}>
                 Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Alert Dialog para confirmar recebimento com entrada no estoque */}
+        <AlertDialog
+          open={!!receiveOrderConfirm}
+          onOpenChange={() => setReceiveOrderConfirm(null)}
+        >
+          <AlertDialogContent className="max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Recebimento do Pedido</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-4">
+                  <p>
+                    Ao confirmar, os seguintes itens serão adicionados ao estoque:
+                  </p>
+                  <div className="bg-muted p-3 rounded-lg max-h-48 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-1">Produto</th>
+                          <th className="text-right py-1">Qtd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {receiveOrderConfirm?.order_items.map((item) => (
+                          <tr key={item.id} className="border-b border-border/50">
+                            <td className="py-1">{item.products.nome}</td>
+                            <td className="text-right py-1 font-medium">+{item.quantidade}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Esta ação atualizará o estoque e não poderá ser desfeita.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleReceiveOrder} className="bg-green-600 hover:bg-green-700">
+                Confirmar Recebimento
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
