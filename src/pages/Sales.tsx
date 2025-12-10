@@ -271,7 +271,7 @@ export default function Sales() {
                           Remover
                         </Button>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Input
                           type="number"
                           min="1"
@@ -282,9 +282,11 @@ export default function Sales() {
                           }
                           className="w-20"
                         />
-                        <span className="text-sm">
-                          x R$ {item.valor_venda.toFixed(2)} = R${" "}
-                          {(item.valor_venda * item.quantidade).toFixed(2)}
+                        <span className="text-sm whitespace-nowrap">
+                          x R$ {item.valor_venda.toFixed(2)}
+                        </span>
+                        <span className="text-sm font-semibold whitespace-nowrap">
+                          = R$ {(item.valor_venda * item.quantidade).toFixed(2)}
                         </span>
                       </div>
                     </Card>

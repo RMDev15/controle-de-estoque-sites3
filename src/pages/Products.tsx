@@ -408,19 +408,20 @@ export default function Products() {
               </Button>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Cor</TableHead>
-                  <TableHead>Estoque</TableHead>
-                  <TableHead>Alerta</TableHead>
-                  <TableHead>Valor UN</TableHead>
-                  <TableHead>Fornecedor</TableHead>
-                  <TableHead>Ação</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">Código</TableHead>
+                    <TableHead className="whitespace-nowrap">Nome</TableHead>
+                    <TableHead className="whitespace-nowrap">Cor</TableHead>
+                    <TableHead className="whitespace-nowrap">Estoque</TableHead>
+                    <TableHead className="whitespace-nowrap">Alerta</TableHead>
+                    <TableHead className="whitespace-nowrap">Valor UN</TableHead>
+                    <TableHead className="whitespace-nowrap">Fornecedor</TableHead>
+                    <TableHead className="whitespace-nowrap">Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {filteredProducts.map((product) => {
                   const alertColor = getAlertColor(product);
@@ -460,7 +461,7 @@ export default function Products() {
                           </TableCell>
                         </TableRow>
                       </HoverCardTrigger>
-                      <HoverCardContent className="w-80" side="right">
+                      <HoverCardContent className="w-80 z-50" side="bottom" align="start" sideOffset={5}>
                         <div className="flex gap-4">
                           {product.foto_url && (
                             <img
@@ -487,7 +488,8 @@ export default function Products() {
                   );
                 })}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </>
         ) : (
           <form onSubmit={handleSubmit} className="max-w-5xl">
