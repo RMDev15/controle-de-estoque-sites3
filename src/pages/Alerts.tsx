@@ -249,7 +249,7 @@ export default function Alerts() {
                     className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
-                  <span className="text-white text-xs md:text-sm">Até</span>
+                  <span className="text-white text-xs md:text-sm font-medium">até</span>
                   <Input
                     type="number"
                     value={alertRanges.verde_max}
@@ -277,7 +277,7 @@ export default function Alerts() {
                     className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled={!selectedProduct}
                   />
-                  <span className="text-black text-xs md:text-sm">Até</span>
+                  <span className="text-black text-xs md:text-sm font-medium">até</span>
                   <Input
                     type="number"
                     value={alertRanges.amarelo_max}
@@ -305,7 +305,7 @@ export default function Alerts() {
                     className="w-16 md:w-20 bg-white text-center text-sm"
                     disabled
                   />
-                  <span className="text-white text-xs md:text-sm">Até</span>
+                  <span className="text-white text-xs md:text-sm font-medium">até</span>
                   <Input
                     type="number"
                     value={alertRanges.vermelho_max}
