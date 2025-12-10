@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,24 +6,40 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
+interface Product {
+  id: string;
+  codigo: string;
+  nome: string;
+  codigo_barras: string | null;
+  estoque_atual: number;
+  valor_venda: number;
+}
+
+interface CartItem extends Product {
+  quantidade: number;
+}
+
+const fetchProducts = async (): Promise<Product[]> => {
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, codigo, nome, codigo_barras, estoque_atual, valor_venda")
+    .gt("estoque_atual", 0)
+    .order("nome");
+  
+  if (error) throw error;
+  return data || [];
+};
 
 export default function Sales() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<any[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [valorPago, setValorPago] = useState("");
@@ -31,21 +47,19 @@ export default function Sales() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  // Cache de produtos com React Query - staleTime de 5 minutos
+  const { data: products = [], isLoading, refetch } = useQuery({
+    queryKey: ["sales-products"],
+    queryFn: fetchProducts,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    gcTime: 10 * 60 * 1000, // 10 minutos no cache
+  });
 
   useEffect(() => {
-    fetchProducts();
-    // Auto focus on search input for barcode scanner
     searchInputRef.current?.focus();
   }, []);
-
-  const fetchProducts = async () => {
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .gt("estoque_atual", 0)
-      .order("nome");
-    setProducts(data || []);
-  };
 
   const filteredProducts = products.filter((p) =>
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -55,7 +69,6 @@ export default function Sales() {
 
   const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchTerm.trim()) {
-      // Search by barcode or code
       const product = products.find(
         (p) =>
           p.codigo_barras === searchTerm.trim() ||
@@ -76,7 +89,7 @@ export default function Sales() {
     }
   };
 
-  const addToCart = (product: any) => {
+  const addToCart = (product: Product) => {
     const existing = cart.find((item) => item.id === product.id);
     if (existing) {
       if (existing.quantidade < product.estoque_atual) {
@@ -168,7 +181,6 @@ export default function Sales() {
 
     // Create sale items and update stock
     for (const item of cart) {
-      // Insert sale item
       await supabase.from("sale_items").insert({
         sale_id: saleData.id,
         product_id: item.id,
@@ -177,7 +189,6 @@ export default function Sales() {
         subtotal: item.valor_venda * item.quantidade,
       });
 
-      // Update product stock
       await supabase
         .from("products")
         .update({
@@ -185,7 +196,6 @@ export default function Sales() {
         })
         .eq("id", item.id);
 
-      // Record stock movement
       await supabase.from("stock_movements").insert({
         product_id: item.id,
         tipo: "saida",
@@ -204,7 +214,9 @@ export default function Sales() {
     setCart([]);
     setShowPaymentDialog(false);
     setValorPago("");
-    fetchProducts();
+    
+    // Invalida o cache e recarrega produtos
+    queryClient.invalidateQueries({ queryKey: ["sales-products"] });
     searchInputRef.current?.focus();
   };
 
@@ -232,22 +244,26 @@ export default function Sales() {
             />
 
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {filteredProducts.map((product) => (
-                <Card key={product.id} className="p-3 flex justify-between items-center">
-                  <div>
-                    <p className="font-medium">{product.nome}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Código: {product.codigo} | Estoque: {product.estoque_atual}
-                    </p>
-                    <p className="text-sm font-bold">
-                      R$ {product.valor_venda.toFixed(2)}
-                    </p>
-                  </div>
-                  <Button size="sm" onClick={() => addToCart(product)}>
-                    Adicionar
-                  </Button>
-                </Card>
-              ))}
+              {isLoading ? (
+                <p className="text-muted-foreground text-center py-4">Carregando produtos...</p>
+              ) : (
+                filteredProducts.map((product) => (
+                  <Card key={product.id} className="p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{product.nome}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Código: {product.codigo} | Estoque: {product.estoque_atual}
+                      </p>
+                      <p className="text-sm font-bold">
+                        R$ {product.valor_venda.toFixed(2)}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => addToCart(product)}>
+                      Adicionar
+                    </Button>
+                  </Card>
+                ))
+              )}
             </div>
           </div>
 
